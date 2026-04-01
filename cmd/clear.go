@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/ashrafali/craft-cli/internal/models"
 	"github.com/spf13/cobra"
 )
@@ -39,8 +37,9 @@ WARNING: This operation is destructive. Use --dry-run to preview first.`,
 				return n
 			}
 			count := countBlocks(blocks.Content)
-			fmt.Printf("Would clear document %s (%d blocks)\n", docID, count)
-			return nil
+			return dryRunOutput("clear", map[string]interface{}{
+				"id": docID, "block_count": count, "destructive": true,
+			})
 		}
 
 		deleted, err := client.ClearDocumentContent(docID)

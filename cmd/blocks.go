@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/ashrafali/craft-cli/internal/models"
@@ -16,9 +20,11 @@ var blocksCmd = &cobra.Command{
 Examples:
   craft blocks get BLOCK_ID                           # Get a specific block
   craft blocks add PAGE_ID --markdown "Hello"         # Add block at end
-  craft blocks add PAGE_ID --markdown "Hi" --pos start # Add at start
-  craft blocks add --sibling ID --pos before -m "..."  # Add before sibling
-  craft blocks update BLOCK_ID --markdown "New text"  # Update block content
+  craft blocks add PAGE_ID -m "Red heading" --text-style h1 --color "#ef052a"
+  craft blocks add PAGE_ID --type line --line-style strong
+  craft blocks add PAGE_ID --json '[{"type":"text","textStyle":"h1","markdown":"Heading"}]'
+  craft blocks update BLOCK_ID --color "#0400ff" --font serif
+  craft blocks update --json '[{"id":"ID","textStyle":"h2"}]'
   craft blocks delete BLOCK_ID                        # Delete a block
   craft blocks move BLOCK_ID --to PAGE_ID --pos end   # Move block`,
 }
@@ -90,12 +96,45 @@ var (
 	blockDate       string
 	blockDepth      int
 	blockMetadata   bool
+
+	// JSON mode flags
+	blockJSON  string
+	blockStdin bool
+
+	// Styling flags (shared between add and update)
+	blockType             string
+	blockTextStyle        string
+	blockListStyle        string
+	blockDecorations      string
+	blockColor            string
+	blockFont             string
+	blockTextAlignment    string
+	blockIndentationLevel string
+	blockLineStyle        string
+	blockLanguage         string
+	blockRawCode          string
+	blockURL              string
+	blockAltText          string
+	blockFileName         string
+	blockTitle            string
+	blockDescription      string
+	blockLayout           string
+	blockBlockLayout      string
+	blockCardLayout       string
+	blockTaskState        string
+	blockScheduleDate     string
+	blockDeadlineDate     string
 )
 
 var blocksAddCmd = &cobra.Command{
 	Use:   "add [page-id]",
 	Short: "Add a block to a document",
 	Long: `Add a new block to a document at a specified position.
+
+Three input modes:
+  1. Flags:  --markdown "text" with optional styling flags
+  2. JSON:   --json '[{"type":"text","markdown":"..."}]'
+  3. Stdin:  echo '[...]' | craft blocks add PAGE_ID --stdin
 
 Positions:
   start  - Add at the beginning of the page
@@ -106,79 +145,142 @@ Positions:
 When --date is provided, adds the block to the daily note for that date.
 The page-id argument is not required when using --sibling or --date.
 
-Examples:
+Styling Examples:
   craft blocks add PAGE_ID --markdown "Hello world"
-  craft blocks add PAGE_ID --markdown "# Header" --position start
-  craft blocks add --sibling BLOCK_ID --position before --markdown "Insert here"
-  craft blocks add --date today --markdown "Daily log entry"
-  craft blocks add --date 2024-01-15 --markdown "Note" --position start`,
+  craft blocks add PAGE_ID --markdown "# Title" --text-style h1 --color "#ef052a"
+  craft blocks add PAGE_ID --type line --line-style strong
+  craft blocks add PAGE_ID --markdown "Note" --decorations callout --color "#00ca85"
+  craft blocks add PAGE_ID --markdown "Centered" --text-alignment center --font serif
+  craft blocks add PAGE_ID --type code --language python --raw-code "print('hi')"
+  craft blocks add --date today --markdown "Daily log" --list-style bullet
+
+JSON Examples:
+  craft blocks add PAGE_ID --json '[{"type":"text","textStyle":"h1","markdown":"# Heading"}]'
+  craft blocks add PAGE_ID --json '{"type":"line","lineStyle":"strong"}'
+  echo '[{"type":"text","markdown":"piped"}]' | craft blocks add PAGE_ID --stdin`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if blockMarkdown == "" {
-			return fmt.Errorf("--markdown is required")
-		}
-
 		client, err := getAPIClient()
 		if err != nil {
 			return err
 		}
 
-		var block *models.Block
+		var blocks []map[string]interface{}
 
-		// Check if using sibling positioning
-		if blockSiblingID != "" {
-			if blockPosition != "before" && blockPosition != "after" {
-				return fmt.Errorf("--position must be 'before' or 'after' when using --sibling")
+		switch {
+		case blockStdin:
+			blocks, err = parseBlocksFromStdin()
+			if err != nil {
+				return err
 			}
-			block, err = client.AddBlockRelative(blockSiblingID, blockMarkdown, blockPosition)
-		} else if blockDate != "" {
-			// Add to daily note by date
-			if blockPosition == "" {
-				blockPosition = "end"
+		case blockJSON != "":
+			blocks, err = parseBlocksJSON(blockJSON)
+			if err != nil {
+				return err
 			}
-			block, err = client.AddBlockToDate(blockDate, blockMarkdown, blockPosition)
-		} else {
-			if len(args) == 0 {
-				return fmt.Errorf("page-id is required when not using --sibling or --date")
+		default:
+			block := buildBlockFromFlags(cmd)
+			if len(block) == 0 {
+				return fmt.Errorf("provide --markdown, --json, --stdin, or a block type like --type line")
 			}
-			pageID := args[0]
-			if blockPosition == "" {
-				blockPosition = "end"
-			}
-			block, err = client.AddBlock(pageID, blockMarkdown, blockPosition)
+			blocks = []map[string]interface{}{block}
 		}
 
+		position, err := buildAddPosition(cmd, args)
+		if err != nil {
+			return err
+		}
+
+		result, err := client.AddBlocksJSON(blocks, position)
 		if err != nil {
 			return err
 		}
 
 		if isQuiet() {
-			fmt.Println(block.ID)
+			for _, b := range result {
+				fmt.Println(b.ID)
+			}
 			return nil
 		}
 
 		format := getOutputFormat()
 		if isJSONFormat(format) {
-			return outputJSON(block)
+			return outputJSON(result)
 		}
-		fmt.Printf("Block created: %s\n", block.ID)
+		for _, b := range result {
+			fmt.Printf("Block created: %s\n", b.ID)
+		}
 		return nil
 	},
 }
 
 var blocksUpdateCmd = &cobra.Command{
 	Use:   "update [block-id]",
-	Short: "Update a block's content",
-	Long:  "Update the markdown content of an existing block",
-	Args:  cobra.ExactArgs(1),
+	Short: "Update a block's content or styling",
+	Long: `Update an existing block's content, styling, or both.
+
+Three input modes:
+  1. Flags:  BLOCK_ID --markdown "text" with optional styling flags
+  2. JSON:   --json '[{"id":"ID","color":"#ff0000"}]'
+  3. Stdin:  echo '[...]' | craft blocks update --stdin
+
+Flag Examples:
+  craft blocks update BLOCK_ID --markdown "New text"
+  craft blocks update BLOCK_ID --color "#ff0000" --font serif
+  craft blocks update BLOCK_ID --text-style h1 --decorations callout
+  craft blocks update BLOCK_ID --text-alignment center
+
+JSON Examples:
+  craft blocks update --json '[{"id":"ID","textStyle":"h2","color":"#0400ff"}]'
+  craft blocks update --json '{"id":"ID","markdown":"Updated"}'
+  echo '[{"id":"ID","color":"#00ca85"}]' | craft blocks update --stdin`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if blockMarkdown == "" {
-			return fmt.Errorf("--markdown is required")
+		var blocks []map[string]interface{}
+		var err error
+
+		switch {
+		case blockStdin:
+			blocks, err = parseBlocksFromStdin()
+			if err != nil {
+				return err
+			}
+			for _, b := range blocks {
+				if _, ok := b["id"]; !ok {
+					return fmt.Errorf("each block in JSON must have an \"id\" field for update")
+				}
+			}
+		case blockJSON != "":
+			blocks, err = parseBlocksJSON(blockJSON)
+			if err != nil {
+				return err
+			}
+			for _, b := range blocks {
+				if _, ok := b["id"]; !ok {
+					return fmt.Errorf("each block in JSON must have an \"id\" field for update")
+				}
+			}
+		default:
+			if len(args) == 0 {
+				return fmt.Errorf("block-id argument is required when not using --json or --stdin")
+			}
+			block := buildUpdateFromFlags(cmd, args[0])
+			if len(block) <= 1 { // only "id" present
+				return fmt.Errorf("at least one property to update is required (e.g. --markdown, --color, --text-style)")
+			}
+			blocks = []map[string]interface{}{block}
 		}
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would update block %s with: %s\n", args[0], blockMarkdown)
-			return nil
+			ids := []string{}
+			for _, b := range blocks {
+				if id, ok := b["id"].(string); ok {
+					ids = append(ids, id)
+				}
+			}
+			return dryRunOutput("update blocks", map[string]interface{}{
+				"block_ids": ids, "count": len(blocks),
+			})
 		}
 
 		client, err := getAPIClient()
@@ -186,13 +288,16 @@ var blocksUpdateCmd = &cobra.Command{
 			return err
 		}
 
-		blockID := args[0]
-		if err := client.UpdateBlockMarkdown(blockID, blockMarkdown); err != nil {
+		if err := client.UpdateBlocksJSON(blocks); err != nil {
 			return err
 		}
 
 		if !isQuiet() {
-			fmt.Printf("Block %s updated\n", blockID)
+			for _, b := range blocks {
+				if id, ok := b["id"].(string); ok {
+					fmt.Printf("Block %s updated\n", id)
+				}
+			}
 		}
 		return nil
 	},
@@ -205,8 +310,9 @@ var blocksDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would delete block: %s\n", args[0])
-			return nil
+			return dryRunOutput("delete block", map[string]interface{}{
+				"id": args[0], "destructive": true,
+			})
 		}
 
 		client, err := getAPIClient()
@@ -244,9 +350,9 @@ Examples:
 		}
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would move block %s to %s at position %s\n",
-				args[0], blockTargetPage, blockPosition)
-			return nil
+			return dryRunOutput("move block", map[string]interface{}{
+				"id": args[0], "target_page": blockTargetPage, "position": blockPosition,
+			})
 		}
 
 		client, err := getAPIClient()
@@ -266,6 +372,223 @@ Examples:
 	},
 }
 
+// ========== Helper Functions ==========
+
+// parseBlocksJSON parses a JSON string into a slice of block maps.
+// Accepts either a JSON array or a single JSON object.
+func parseBlocksJSON(jsonStr string) ([]map[string]interface{}, error) {
+	jsonStr = strings.TrimSpace(jsonStr)
+	if jsonStr == "" {
+		return nil, fmt.Errorf("empty JSON input")
+	}
+
+	// Try array first
+	if jsonStr[0] == '[' {
+		var blocks []map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &blocks); err != nil {
+			return nil, fmt.Errorf("invalid JSON array: %w", err)
+		}
+		return blocks, nil
+	}
+
+	// Try single object
+	var block map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &block); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	return []map[string]interface{}{block}, nil
+}
+
+// parseBlocksFromStdin reads JSON block data from stdin.
+func parseBlocksFromStdin() ([]map[string]interface{}, error) {
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read stdin: %w", err)
+	}
+	return parseBlocksJSON(string(data))
+}
+
+// buildAddPosition constructs the position map from command flags and args.
+func buildAddPosition(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	pos := make(map[string]interface{})
+
+	position := blockPosition
+	if position == "" {
+		position = "end"
+	}
+	pos["position"] = position
+
+	if blockSiblingID != "" {
+		if position != "before" && position != "after" {
+			return nil, fmt.Errorf("--position must be 'before' or 'after' when using --sibling")
+		}
+		pos["siblingId"] = blockSiblingID
+		return pos, nil
+	}
+
+	if blockDate != "" {
+		pos["date"] = blockDate
+		return pos, nil
+	}
+
+	if len(args) == 0 {
+		return nil, fmt.Errorf("page-id is required when not using --sibling or --date")
+	}
+	pos["pageId"] = args[0]
+	return pos, nil
+}
+
+// buildBlockFromFlags constructs a block map from individual CLI flags.
+func buildBlockFromFlags(cmd *cobra.Command) map[string]interface{} {
+	block := make(map[string]interface{})
+
+	// Type defaults to "text" only if we have content
+	if cmd.Flags().Changed("type") {
+		block["type"] = blockType
+	}
+
+	if cmd.Flags().Changed("markdown") {
+		block["markdown"] = blockMarkdown
+	}
+
+	addStylingToMap(cmd, block)
+
+	// If no type was set but we have some properties, default to "text"
+	if _, hasType := block["type"]; !hasType && len(block) > 0 {
+		block["type"] = "text"
+	}
+
+	return block
+}
+
+// buildUpdateFromFlags constructs an update block map from CLI flags and the block ID.
+func buildUpdateFromFlags(cmd *cobra.Command, blockID string) map[string]interface{} {
+	block := make(map[string]interface{})
+	block["id"] = blockID
+
+	if cmd.Flags().Changed("markdown") {
+		block["markdown"] = blockMarkdown
+	}
+
+	addStylingToMap(cmd, block)
+
+	return block
+}
+
+// addStylingToMap adds styling properties to a block map based on which flags were changed.
+func addStylingToMap(cmd *cobra.Command, block map[string]interface{}) {
+	if cmd.Flags().Changed("text-style") {
+		block["textStyle"] = blockTextStyle
+	}
+	if cmd.Flags().Changed("list-style") {
+		block["listStyle"] = blockListStyle
+	}
+	if cmd.Flags().Changed("decorations") {
+		parts := strings.Split(blockDecorations, ",")
+		var trimmed []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				trimmed = append(trimmed, p)
+			}
+		}
+		if len(trimmed) > 0 {
+			block["decorations"] = trimmed
+		}
+	}
+	if cmd.Flags().Changed("color") {
+		block["color"] = blockColor
+	}
+	if cmd.Flags().Changed("font") {
+		block["font"] = blockFont
+	}
+	if cmd.Flags().Changed("text-alignment") {
+		block["textAlignment"] = blockTextAlignment
+	}
+	if cmd.Flags().Changed("indentation-level") {
+		if level, err := strconv.Atoi(blockIndentationLevel); err == nil {
+			block["indentationLevel"] = level
+		}
+	}
+	if cmd.Flags().Changed("line-style") {
+		block["lineStyle"] = blockLineStyle
+	}
+	if cmd.Flags().Changed("language") {
+		block["language"] = blockLanguage
+	}
+	if cmd.Flags().Changed("raw-code") {
+		block["rawCode"] = blockRawCode
+	}
+	if cmd.Flags().Changed("url") {
+		block["url"] = blockURL
+	}
+	if cmd.Flags().Changed("alt-text") {
+		block["altText"] = blockAltText
+	}
+	if cmd.Flags().Changed("file-name") {
+		block["fileName"] = blockFileName
+	}
+	if cmd.Flags().Changed("title") {
+		block["title"] = blockTitle
+	}
+	if cmd.Flags().Changed("description") {
+		block["description"] = blockDescription
+	}
+	if cmd.Flags().Changed("layout") {
+		block["layout"] = blockLayout
+	}
+	if cmd.Flags().Changed("block-layout") {
+		block["blockLayout"] = blockBlockLayout
+	}
+	if cmd.Flags().Changed("card-layout") {
+		block["cardLayout"] = blockCardLayout
+	}
+
+	// Task info: build only if any task flag is set
+	taskInfo := make(map[string]interface{})
+	if cmd.Flags().Changed("task-state") {
+		taskInfo["state"] = blockTaskState
+	}
+	if cmd.Flags().Changed("schedule-date") {
+		taskInfo["scheduleDate"] = blockScheduleDate
+	}
+	if cmd.Flags().Changed("deadline-date") {
+		taskInfo["deadlineDate"] = blockDeadlineDate
+	}
+	if len(taskInfo) > 0 {
+		block["taskInfo"] = taskInfo
+	}
+}
+
+// registerStylingFlags adds all styling flags to a command.
+// includeType controls whether --type is registered (add yes, update no since type is immutable).
+func registerStylingFlags(cmd *cobra.Command, includeType bool) {
+	if includeType {
+		cmd.Flags().StringVar(&blockType, "type", "text", "Block type: text, page, code, line, richUrl, image, file")
+	}
+	cmd.Flags().StringVar(&blockTextStyle, "text-style", "", "Text style: h1, h2, h3, h4, caption, body, page, card")
+	cmd.Flags().StringVar(&blockListStyle, "list-style", "", "List style: none, bullet, numbered, task, toggle")
+	cmd.Flags().StringVar(&blockDecorations, "decorations", "", "Decorations (comma-separated): callout, quote")
+	cmd.Flags().StringVar(&blockColor, "color", "", "Block color as #RRGGBB hex (e.g. #ef052a)")
+	cmd.Flags().StringVar(&blockFont, "font", "", "Font: system, serif, mono, rounded")
+	cmd.Flags().StringVar(&blockTextAlignment, "text-alignment", "", "Text alignment: left, center, right, justify")
+	cmd.Flags().StringVar(&blockIndentationLevel, "indentation-level", "", "Indentation level: 0-5")
+	cmd.Flags().StringVar(&blockLineStyle, "line-style", "", "Line/divider style: strong, regular, light, extraLight, pageBreak")
+	cmd.Flags().StringVar(&blockLanguage, "language", "", "Code block language (e.g. python, javascript, math_formula)")
+	cmd.Flags().StringVar(&blockRawCode, "raw-code", "", "Raw code content for code blocks")
+	cmd.Flags().StringVar(&blockURL, "url", "", "URL for richUrl, image, video, or file blocks")
+	cmd.Flags().StringVar(&blockAltText, "alt-text", "", "Alt text for image/video blocks")
+	cmd.Flags().StringVar(&blockFileName, "file-name", "", "File name for file blocks")
+	cmd.Flags().StringVar(&blockTitle, "title", "", "Title for richUrl blocks")
+	cmd.Flags().StringVar(&blockDescription, "description", "", "Description for richUrl blocks")
+	cmd.Flags().StringVar(&blockLayout, "layout", "", "Layout for richUrl: small, regular, card")
+	cmd.Flags().StringVar(&blockBlockLayout, "block-layout", "", "Layout for file blocks: small, regular, card")
+	cmd.Flags().StringVar(&blockCardLayout, "card-layout", "", "Card layout: small, square, regular, large")
+	cmd.Flags().StringVar(&blockTaskState, "task-state", "", "Task state: todo, done, canceled")
+	cmd.Flags().StringVar(&blockScheduleDate, "schedule-date", "", "Task schedule date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&blockDeadlineDate, "deadline-date", "", "Task deadline date (YYYY-MM-DD)")
+}
+
 func init() {
 	rootCmd.AddCommand(blocksCmd)
 
@@ -279,11 +602,15 @@ func init() {
 	blocksAddCmd.Flags().StringVarP(&blockPosition, "position", "p", "end", "Position: start, end, before, after")
 	blocksAddCmd.Flags().StringVar(&blockSiblingID, "sibling", "", "Sibling block ID for relative positioning")
 	blocksAddCmd.Flags().StringVar(&blockDate, "date", "", "Daily note date (today, tomorrow, yesterday, YYYY-MM-DD)")
-	blocksAddCmd.MarkFlagRequired("markdown")
+	blocksAddCmd.Flags().StringVar(&blockJSON, "json", "", "Block(s) as JSON (array or single object)")
+	blocksAddCmd.Flags().BoolVar(&blockStdin, "stdin", false, "Read block JSON from stdin")
+	registerStylingFlags(blocksAddCmd, true)
 
 	blocksCmd.AddCommand(blocksUpdateCmd)
 	blocksUpdateCmd.Flags().StringVarP(&blockMarkdown, "markdown", "m", "", "New markdown content")
-	blocksUpdateCmd.MarkFlagRequired("markdown")
+	blocksUpdateCmd.Flags().StringVar(&blockJSON, "json", "", "Block(s) as JSON with \"id\" fields (array or single object)")
+	blocksUpdateCmd.Flags().BoolVar(&blockStdin, "stdin", false, "Read block JSON from stdin")
+	registerStylingFlags(blocksUpdateCmd, false)
 
 	blocksCmd.AddCommand(blocksDeleteCmd)
 

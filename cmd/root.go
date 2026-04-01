@@ -23,7 +23,7 @@ var (
 	apiKey       string
 	outputFormat string
 	cfgManager   *config.Manager
-	version      = "1.8.0"
+	version      = "1.9.0"
 
 	// Global flags for LLM/scripting friendliness
 	quietMode  bool
@@ -33,6 +33,7 @@ var (
 	rawOutput  bool
 	idOnly     bool
 	dryRun     bool
+	yesFlag    bool
 )
 
 // rootCmd represents the base command
@@ -118,6 +119,7 @@ Documentation:
 	rootCmd.PersistentFlags().BoolVar(&rawOutput, "raw", false, "Output raw content without formatting")
 	rootCmd.PersistentFlags().BoolVar(&idOnly, "id-only", false, "Output only document IDs (shorthand for --output-only id)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Show what would happen without making changes")
+	rootCmd.PersistentFlags().BoolVarP(&yesFlag, "yes", "y", false, "Skip confirmation prompts")
 }
 
 func initConfig() {
@@ -207,6 +209,9 @@ func handleError(err error) {
 		json.NewEncoder(os.Stderr).Encode(errObj)
 	} else {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if hint := errorHint(categorizeError(err)); hint != "" {
+			fmt.Fprintf(os.Stderr, "Hint: %s\n", hint)
+		}
 	}
 
 	switch categorizeError(err) {
@@ -265,13 +270,21 @@ func categorizeError(err error) string {
 func errorHint(code string) string {
 	switch code {
 	case "PAYLOAD_TOO_LARGE":
-		return "Reduce payload size or use chunking/replace modes (e.g. craft update --chunk-bytes 20000 or craft update --mode replace)."
+		return "Reduce payload size or use chunking (craft update --chunk-bytes 20000). (not retryable)"
 	case "PERMISSION_DENIED":
-		return "This link/API key has insufficient permissions. Both public links and API keys can be read-only, write-only, or read-write. Check the link's permission settings in Craft. Use 'craft info --test-permissions' to see what your current profile can do."
+		return "Check link permissions in Craft. Use 'craft info --test-permissions'. (not retryable)"
 	case "AUTH_ERROR":
-		return "Authentication failed. Check your API key is valid and not expired. Use --api-key flag or configure with 'craft config add'."
+		return "Check API key. Use --api-key flag or 'craft config add'. (not retryable)"
 	case "CONFIG_ERROR":
-		return "Configuration error. Your config file is at ~/.craft-cli/config.json. Run 'craft config list' to see profiles or 'craft setup' to reconfigure."
+		return "Run 'craft config list' or 'craft setup' to reconfigure. (not retryable)"
+	case "NOT_FOUND":
+		return "Check the ID is correct. Use 'craft list --id-only' to find valid IDs. (not retryable)"
+	case "RATE_LIMIT":
+		return "Wait and retry. The API limits request frequency. (retryable)"
+	case "API_ERROR":
+		return "Server error. Retry in a few seconds. If persistent, check Craft status. (retryable)"
+	case "USER_ERROR":
+		return "Check command usage with --help. (not retryable)"
 	default:
 		return ""
 	}
@@ -293,6 +306,28 @@ func containsImpl(s, substr string) bool {
 // isQuiet returns whether quiet mode is enabled
 func isQuiet() bool {
 	return quietMode
+}
+
+// dryRunOutput prints structured dry-run info.
+// If JSON mode, outputs JSON to stdout. Otherwise prints human prose.
+func dryRunOutput(action string, target map[string]interface{}) error {
+	if getOutputFormat() == "json" || jsonErrors {
+		result := map[string]interface{}{
+			"dry_run": true,
+			"action":  action,
+			"target":  target,
+		}
+		return outputJSON(result)
+	}
+	fmt.Printf("[dry-run] Would %s", action)
+	if id, ok := target["id"]; ok {
+		fmt.Printf(" %v", id)
+	}
+	if title, ok := target["title"]; ok {
+		fmt.Printf(" (%v)", title)
+	}
+	fmt.Println()
+	return nil
 }
 
 // isDryRun returns whether dry-run mode is enabled

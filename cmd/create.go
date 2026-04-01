@@ -78,21 +78,19 @@ Examples:
 			return fmt.Errorf("title is required (use --title)")
 		}
 
-		// Dry run mode
 		if isDryRun() {
-			fmt.Println("Would create document:")
-			fmt.Printf("  Title: %s\n", req.Title)
+			target := map[string]interface{}{"title": req.Title}
 			if req.ParentID != "" {
-				fmt.Printf("  Parent: %s\n", req.ParentID)
+				target["parent"] = req.ParentID
 			}
 			if req.Markdown != "" {
 				preview := req.Markdown
 				if len(preview) > 100 {
 					preview = preview[:100] + "..."
 				}
-				fmt.Printf("  Content: %s\n", preview)
+				target["content_preview"] = preview
 			}
-			return nil
+			return dryRunOutput("create", target)
 		}
 
 		doc, err := client.CreateDocument(req)

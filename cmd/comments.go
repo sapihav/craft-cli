@@ -32,8 +32,9 @@ Examples:
 		blockID := args[0]
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would add comment to block %s: %s\n", blockID, commentContent)
-			return nil
+			return dryRunOutput("add comment", map[string]interface{}{
+				"block_id": blockID, "content": commentContent,
+			})
 		}
 
 		client, err := getAPIClient()

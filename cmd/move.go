@@ -31,12 +31,13 @@ Examples:
 		}
 
 		if isDryRun() {
+			target := map[string]interface{}{"id": args[0]}
 			if moveTargetFolder != "" {
-				fmt.Printf("[dry-run] Would move document %s to folder %s\n", args[0], moveTargetFolder)
+				target["destination_folder"] = moveTargetFolder
 			} else {
-				fmt.Printf("[dry-run] Would move document %s to %s\n", args[0], moveTargetLocation)
+				target["destination_location"] = moveTargetLocation
 			}
-			return nil
+			return dryRunOutput("move", target)
 		}
 
 		client, err := getAPIClient()

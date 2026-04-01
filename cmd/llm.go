@@ -410,4 +410,51 @@ Common combinations:
   - Styled callout: decorations + textStyle + color
   - Fancy list: listStyle + indentationLevel + color
   - Styled paragraph: font + color + textAlignment
+
+## CLI Styling (craft blocks add / update)
+
+The CLI supports full styling via individual flags or JSON mode.
+
+Flag mode — build one block from flags:
+  craft blocks add PAGE_ID --markdown "# Title" --text-style h1 --color "#ef052a"
+  craft blocks add PAGE_ID --type line --line-style strong
+  craft blocks add PAGE_ID --markdown "Note" --decorations callout --color "#00ca85"
+  craft blocks add PAGE_ID --markdown "Centered" --text-alignment center --font serif
+  craft blocks add PAGE_ID --type code --language python --raw-code "print('hi')"
+  craft blocks add PAGE_ID --markdown "- Item" --list-style bullet --indentation-level 1
+  craft blocks add PAGE_ID --markdown "- [ ] Task" --list-style task --task-state todo
+
+  craft blocks update BLOCK_ID --color "#0400ff" --font serif
+  craft blocks update BLOCK_ID --text-style h1 --decorations callout
+  craft blocks update BLOCK_ID --text-alignment center
+
+JSON mode — pass-through for full control (multiple blocks, nested content):
+  craft blocks add PAGE_ID --json '[{"type":"text","textStyle":"h1","markdown":"# Heading"}]'
+  craft blocks add PAGE_ID --json '{"type":"line","lineStyle":"strong"}'
+  craft blocks update --json '[{"id":"BLOCK_ID","textStyle":"h2","color":"#0400ff"}]'
+  echo '[{"type":"text","color":"#00ca85","markdown":"Green"}]' | craft blocks add PAGE_ID --stdin
+
+Available styling flags:
+  --type              Block type: text, page, code, line, richUrl, image, file (add only)
+  --text-style        h1, h2, h3, h4, caption, body, page, card
+  --list-style        none, bullet, numbered, task, toggle
+  --decorations       Comma-separated: callout, quote
+  --color             #RRGGBB hex (e.g. #ef052a)
+  --font              system, serif, mono, rounded
+  --text-alignment    left, center, right, justify
+  --indentation-level 0-5
+  --line-style        strong, regular, light, extraLight, pageBreak
+  --language          Code block language (python, javascript, math_formula, etc.)
+  --raw-code          Raw code content for code blocks
+  --url               URL for richUrl, image, video, or file blocks
+  --alt-text          Alt text for image/video blocks
+  --file-name         File name for file blocks
+  --title             Title for richUrl blocks
+  --description       Description for richUrl blocks
+  --layout            Layout for richUrl: small, regular, card
+  --block-layout      Layout for file blocks: small, regular, card
+  --card-layout       Card layout: small, square, regular, large
+  --task-state        Task state: todo, done, canceled
+  --schedule-date     Task schedule date (YYYY-MM-DD)
+  --deadline-date     Task deadline date (YYYY-MM-DD)
 `

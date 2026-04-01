@@ -241,7 +241,18 @@ func (c *Client) GetDocumentContentMarkdown(id string) (string, error) {
 
 // GetDocumentBlocks retrieves the raw blocks response for a document.
 func (c *Client) GetDocumentBlocks(id string) (models.BlocksResponse, error) {
-	path := fmt.Sprintf("/blocks?id=%s", url.QueryEscape(id))
+	return c.GetDocumentBlocksWithDepth(id, -1)
+}
+
+// GetDocumentBlocksWithDepth retrieves blocks with optional depth control.
+func (c *Client) GetDocumentBlocksWithDepth(id string, maxDepth int) (models.BlocksResponse, error) {
+	params := url.Values{}
+	params.Set("id", id)
+	if maxDepth != -1 {
+		params.Set("maxDepth", strconv.Itoa(maxDepth))
+	}
+	path := "/blocks?" + params.Encode()
+
 	data, err := c.doRequest("GET", path, nil)
 	if err != nil {
 		return models.BlocksResponse{}, err

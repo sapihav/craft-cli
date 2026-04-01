@@ -35,9 +35,13 @@ Examples:
   craft whiteboards create abc123 --dry-run`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "page-id"); err != nil {
+			return err
+		}
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would create whiteboard in page: %s\n", args[0])
-			return nil
+			return dryRunOutput("create whiteboard", map[string]interface{}{
+				"page_id": args[0],
+			})
 		}
 
 		client, err := getAPIClient()
@@ -64,6 +68,9 @@ Examples:
   craft whiteboards get abc123 --quiet`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "whiteboard-id"); err != nil {
+			return err
+		}
 		client, err := getAPIClient()
 		if err != nil {
 			return err
@@ -109,8 +116,9 @@ Examples:
 		}
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would add elements to whiteboard %s:\n%s\n", args[0], data)
-			return nil
+			return dryRunOutput("add whiteboard elements", map[string]interface{}{
+				"whiteboard_id": args[0],
+			})
 		}
 
 		var elements []map[string]interface{}
@@ -162,8 +170,9 @@ Examples:
 		}
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would update elements in whiteboard %s:\n%s\n", args[0], data)
-			return nil
+			return dryRunOutput("update whiteboard elements", map[string]interface{}{
+				"whiteboard_id": args[0],
+			})
 		}
 
 		var elements []map[string]interface{}
@@ -211,8 +220,9 @@ Examples:
 		}
 
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would delete %d elements from whiteboard %s: %s\n", len(ids), args[0], whiteboardIDs)
-			return nil
+			return dryRunOutput("delete whiteboard elements", map[string]interface{}{
+				"whiteboard_id": args[0], "element_ids": ids, "count": len(ids),
+			})
 		}
 
 		client, err := getAPIClient()

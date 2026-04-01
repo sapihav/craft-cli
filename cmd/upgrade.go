@@ -22,6 +22,7 @@ type updateCheckCache struct {
 	LastCheck      time.Time `json:"last_check"`
 	LatestVersion  string    `json:"latest_version"`
 	UpdateRequired bool      `json:"update_required"`
+	LastNotified   time.Time `json:"last_notified"`
 }
 
 // checkForUpdates checks if a new version is available (without installing)
@@ -66,9 +67,15 @@ func checkForUpdates() (hasUpdate bool, latestVersion string, err error) {
 	return hasUpdate, latestVer, nil
 }
 
-// notifyUpdateAvailable shows update notification if not in quiet mode
+// notifyUpdateAvailable shows update notification at most once per day
 func notifyUpdateAvailable() {
 	if quietMode {
+		return
+	}
+
+	// Check if we already notified recently (once per day max)
+	cached, cacheErr := loadUpdateCache()
+	if cacheErr == nil && !cached.LastNotified.IsZero() && time.Since(cached.LastNotified) < 24*time.Hour {
 		return
 	}
 
@@ -77,8 +84,15 @@ func notifyUpdateAvailable() {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "\n🎁 New version available: %s (current: %s)\n", latestVersion, version)
+	fmt.Fprintf(os.Stderr, "\nNew version available: %s (current: %s)\n", latestVersion, version)
 	fmt.Fprintf(os.Stderr, "Run 'craft upgrade' to update\n\n")
+
+	// Mark that we showed the notification
+	if cached == nil {
+		cached = &updateCheckCache{}
+	}
+	cached.LastNotified = time.Now()
+	saveUpdateCache(*cached)
 }
 
 // loadUpdateCache loads the cached update check result

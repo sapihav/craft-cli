@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	outputFile string
+	outputFile  string
+	getMaxDepth int
 )
 
 var getCmd = &cobra.Command{
@@ -40,11 +41,14 @@ Examples:
 		}
 
 		docID := args[0]
+		if err := validateResourceID(docID, "document-id"); err != nil {
+			return err
+		}
 		format := getOutputFormat()
 
 		// For structured/craft/rich formats, get full block response
 		if format == FormatStructured || format == FormatCraft || format == FormatRich {
-			blocksResp, err := client.GetDocumentBlocks(docID)
+			blocksResp, err := client.GetDocumentBlocksWithDepth(docID, getMaxDepth)
 			if err != nil {
 				return err
 			}
@@ -126,4 +130,5 @@ func writeBlocksToFile(blocksResp *models.BlocksResponse, format string) error {
 func init() {
 	rootCmd.AddCommand(getCmd)
 	getCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Write document content to file")
+	getCmd.Flags().IntVar(&getMaxDepth, "max-depth", -1, "Maximum block nesting depth (-1 = all, 0 = top level only)")
 }

@@ -7,13 +7,14 @@ import (
 )
 
 var (
-	listFolderID      string
-	listLocation      string
-	listCreatedAfter  string
-	listCreatedBefore string
-	listModifiedAfter string
+	listFolderID       string
+	listLocation       string
+	listCreatedAfter   string
+	listCreatedBefore  string
+	listModifiedAfter  string
 	listModifiedBefore string
-	listMetadata      bool
+	listMetadata       bool
+	listLimit          int
 )
 
 var listCmd = &cobra.Command{
@@ -66,6 +67,10 @@ Examples:
 			return err
 		}
 
+		if listLimit > 0 && len(result.Items) > listLimit {
+			result.Items = result.Items[:listLimit]
+		}
+
 		format := getOutputFormat()
 		if format == FormatJSON {
 			return outputDocumentsPayload(result, format)
@@ -83,4 +88,5 @@ func init() {
 	listCmd.Flags().StringVar(&listModifiedAfter, "modified-after", "", "Filter documents modified on or after this date (YYYY-MM-DD)")
 	listCmd.Flags().StringVar(&listModifiedBefore, "modified-before", "", "Filter documents modified on or before this date (YYYY-MM-DD)")
 	listCmd.Flags().BoolVar(&listMetadata, "metadata", false, "Fetch document metadata (dates, authors)")
+	listCmd.Flags().IntVar(&listLimit, "limit", 0, "Maximum number of results to return (0 = all)")
 }

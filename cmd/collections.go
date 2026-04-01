@@ -124,8 +124,9 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would add item to collection %s: %s\n", args[0], collectionItemTitle)
-			return nil
+			return dryRunOutput("add collection item", map[string]interface{}{
+				"collection_id": args[0], "title": collectionItemTitle,
+			})
 		}
 
 		client, err := getAPIClient()
@@ -179,8 +180,9 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would update item %s in collection %s\n", collectionItemID, args[0])
-			return nil
+			return dryRunOutput("update collection item", map[string]interface{}{
+				"collection_id": args[0], "item_id": collectionItemID,
+			})
 		}
 
 		client, err := getAPIClient()
@@ -213,8 +215,9 @@ var collectionsDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isDryRun() {
-			fmt.Printf("[dry-run] Would delete item %s from collection %s\n", collectionItemID, args[0])
-			return nil
+			return dryRunOutput("delete collection item", map[string]interface{}{
+				"collection_id": args[0], "item_id": collectionItemID, "destructive": true,
+			})
 		}
 
 		client, err := getAPIClient()

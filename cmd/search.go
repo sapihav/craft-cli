@@ -12,17 +12,18 @@ import (
 )
 
 var (
-	searchDocument      string
-	searchRegex         string
-	searchCaseSensitive bool
+	searchDocument       string
+	searchRegex          string
+	searchCaseSensitive  bool
 	searchContext        int
-	searchLocation      string
-	searchFolder        string
-	searchMetadata      bool
-	searchCreatedAfter  string
-	searchCreatedBefore string
-	searchModifiedAfter string
+	searchLocation       string
+	searchFolder         string
+	searchMetadata       bool
+	searchCreatedAfter   string
+	searchCreatedBefore  string
+	searchModifiedAfter  string
 	searchModifiedBefore string
+	searchLimit          int
 )
 
 var searchCmd = &cobra.Command{
@@ -74,6 +75,7 @@ func init() {
 	searchCmd.Flags().StringVar(&searchCreatedBefore, "created-before", "", "Filter: created on or before date (YYYY-MM-DD)")
 	searchCmd.Flags().StringVar(&searchModifiedAfter, "modified-after", "", "Filter: modified on or after date (YYYY-MM-DD)")
 	searchCmd.Flags().StringVar(&searchModifiedBefore, "modified-before", "", "Filter: modified on or before date (YYYY-MM-DD)")
+	searchCmd.Flags().IntVar(&searchLimit, "limit", 0, "Maximum number of results to return (0 = all, API max is 20)")
 }
 
 // runBlockSearch executes a block-level search within a document.
@@ -131,6 +133,10 @@ func runDocumentSearch(client *api.Client, args []string, format string) error {
 	result, err := client.SearchDocumentsAdvanced(query, opts)
 	if err != nil {
 		return err
+	}
+
+	if searchLimit > 0 && len(result.Items) > searchLimit {
+		result.Items = result.Items[:searchLimit]
 	}
 
 	if len(result.Items) == 0 {

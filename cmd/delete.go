@@ -22,23 +22,22 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		docID := args[0]
+		if err := validateResourceID(docID, "document-id"); err != nil {
+			return err
+		}
 
-		// Dry run mode - try to get doc info first
 		if isDryRun() {
 			client, err := getAPIClient()
 			if err != nil {
 				return err
 			}
-
 			doc, err := client.GetDocument(docID)
 			if err != nil {
 				return fmt.Errorf("document not found: %s", docID)
 			}
-
-			fmt.Printf("Would move document to trash:\n")
-			fmt.Printf("  ID: %s\n", doc.ID)
-			fmt.Printf("  Title: %s\n", doc.Title)
-			return nil
+			return dryRunOutput("delete", map[string]interface{}{
+				"id": doc.ID, "title": doc.Title, "reversible": true,
+			})
 		}
 
 		client, err := getAPIClient()
