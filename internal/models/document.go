@@ -4,15 +4,17 @@ import "time"
 
 // Document represents a Craft document
 type Document struct {
-	ID          string    `json:"id"`
-	SpaceID     string    `json:"spaceId"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content,omitempty"`
-	Markdown    string    `json:"markdown,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	ParentID    string    `json:"parentId,omitempty"`
-	HasChildren bool      `json:"hasChildren"`
+	ID             string    `json:"id"`
+	SpaceID        string    `json:"spaceId"`
+	Title          string    `json:"title"`
+	Content        string    `json:"content,omitempty"`
+	Markdown       string    `json:"markdown,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+	LastModifiedAt time.Time `json:"lastModifiedAt"`
+	ParentID       string    `json:"parentId,omitempty"`
+	HasChildren    bool      `json:"hasChildren"`
+	ClickableLink  string    `json:"clickableLink,omitempty"`
+	DailyNoteDate  string    `json:"dailyNoteDate,omitempty"`
 }
 
 // Block represents a content block from the Craft blocks API
@@ -162,13 +164,39 @@ type AddBlockRequest struct {
 	RelativePos    string `json:"relativePos,omitempty"`    // before, after
 }
 
-// UpdateBlockRequest represents a request to update a block
+// UpdateBlockRequest represents a request to update a block with full styling support
 type UpdateBlockRequest struct {
-	Markdown  string `json:"markdown,omitempty"`
-	TextStyle string `json:"textStyle,omitempty"`
-	ListStyle string `json:"listStyle,omitempty"`
-	Color     string `json:"color,omitempty"`
-	Font      string `json:"font,omitempty"`
+	// Content
+	Markdown string `json:"markdown,omitempty"`
+	RawCode  string `json:"rawCode,omitempty"`
+
+	// Styling
+	TextStyle        string   `json:"textStyle,omitempty"`        // h1, h2, h3, h4, caption, body, page, card
+	ListStyle        string   `json:"listStyle,omitempty"`        // none, bullet, numbered, task, toggle
+	Decorations      []string `json:"decorations,omitempty"`      // callout, quote
+	Color            string   `json:"color,omitempty"`            // #RRGGBB hex
+	Font             string   `json:"font,omitempty"`             // system, serif, mono, rounded
+	TextAlignment    string   `json:"textAlignment,omitempty"`    // left, center, right, justify
+	IndentationLevel *int     `json:"indentationLevel,omitempty"` // 0-5 (pointer to distinguish 0 from unset)
+	LineStyle        string   `json:"lineStyle,omitempty"`        // strong, regular, light, extraLight, pageBreak
+
+	// Code blocks
+	Language string `json:"language,omitempty"`
+
+	// Media / file blocks
+	URL      string `json:"url,omitempty"`
+	AltText  string `json:"altText,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+
+	// Rich URL blocks
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Layout      string `json:"layout,omitempty"`      // small, regular, card
+	BlockLayout string `json:"blockLayout,omitempty"` // small, regular, card (file blocks)
+	CardLayout  string `json:"cardLayout,omitempty"`  // small, square, regular, large
+
+	// Task info
+	TaskInfo *TaskInfo `json:"taskInfo,omitempty"`
 }
 
 // DocumentList represents the response from listing documents

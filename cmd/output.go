@@ -98,7 +98,7 @@ func getDocField(doc *models.Document, field string) (string, error) {
 	case "createdat", "created_at", "created-at":
 		return doc.CreatedAt.Format("2006-01-02T15:04:05Z"), nil
 	case "updatedat", "updated_at", "updated-at":
-		return doc.UpdatedAt.Format("2006-01-02T15:04:05Z"), nil
+		return doc.LastModifiedAt.Format("2006-01-02T15:04:05Z"), nil
 	default:
 		// Try reflection for any other field
 		v := reflect.ValueOf(doc).Elem()
@@ -146,7 +146,7 @@ func outputTable(docs []models.Document) error {
 		if len(title) > 50 {
 			title = title[:47] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", doc.ID, title, doc.UpdatedAt.Format("2006-01-02 15:04"))
+		fmt.Fprintf(w, "%s\t%s\t%s\n", doc.ID, title, doc.LastModifiedAt.Format("2006-01-02 15:04"))
 	}
 
 	return w.Flush()
@@ -170,7 +170,7 @@ func outputDocumentTable(doc *models.Document) error {
 	}
 
 	fmt.Fprintf(w, "Created\t%s\n", doc.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Updated\t%s\n", doc.UpdatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(w, "Updated\t%s\n", doc.LastModifiedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Has Children\t%v\n", doc.HasChildren)
 
 	if doc.Content != "" {
@@ -198,7 +198,7 @@ func outputMarkdown(docs []models.Document) error {
 	for _, doc := range docs {
 		fmt.Printf("## %s\n", doc.Title)
 		fmt.Printf("- **ID**: %s\n", doc.ID)
-		fmt.Printf("- **Updated**: %s\n", doc.UpdatedAt.Format("2006-01-02 15:04"))
+		fmt.Printf("- **Updated**: %s\n", doc.LastModifiedAt.Format("2006-01-02 15:04"))
 		if doc.Content != "" {
 			fmt.Printf("- **Content**: %s\n", doc.Content)
 		}
@@ -218,7 +218,7 @@ func outputDocumentMarkdown(doc *models.Document) error {
 	}
 
 	fmt.Printf("- **Created**: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("- **Updated**: %s\n", doc.UpdatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("- **Updated**: %s\n", doc.LastModifiedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("- **Has Children**: %v\n", doc.HasChildren)
 
 	if doc.Markdown != "" {

@@ -39,7 +39,7 @@ func TestClient_GetDocuments(t *testing.T) {
 					ID:        "doc1",
 					Title:     "Test Document",
 					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					LastModifiedAt: time.Now(),
 				},
 			},
 			Total: 1,
@@ -472,6 +472,223 @@ func TestClient_ClearDocumentContent(t *testing.T) {
 		}
 		if count != 0 {
 			t.Fatalf("Expected 0 deleted blocks, got %d", count)
+		}
+	})
+}
+
+func TestClient_AddBlocksJSON(t *testing.T) {
+	t.Run("sends blocks array with position", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "POST" {
+				t.Errorf("Expected POST method, got %s", r.Method)
+			}
+			if r.URL.Path != "/blocks" {
+				t.Errorf("Expected path /blocks, got %s", r.URL.Path)
+			}
+
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("Failed to decode request body: %v", err)
+			}
+
+			// Verify blocks array
+			blocks, ok := body["blocks"].([]interface{})
+			if !ok {
+				t.Fatal("Expected 'blocks' array in request body")
+			}
+			if len(blocks) != 2 {
+				t.Errorf("Expected 2 blocks, got %d", len(blocks))
+			}
+
+			// Verify first block has styling
+			b1 := blocks[0].(map[string]interface{})
+			if b1["type"] != "text" {
+				t.Errorf("Expected type 'text', got %v", b1["type"])
+			}
+			if b1["textStyle"] != "h1" {
+				t.Errorf("Expected textStyle 'h1', got %v", b1["textStyle"])
+			}
+			if b1["color"] != "#ef052a" {
+				t.Errorf("Expected color '#ef052a', got %v", b1["color"])
+			}
+
+			// Verify second block is a line
+			b2 := blocks[1].(map[string]interface{})
+			if b2["type"] != "line" {
+				t.Errorf("Expected type 'line', got %v", b2["type"])
+			}
+			if b2["lineStyle"] != "strong" {
+				t.Errorf("Expected lineStyle 'strong', got %v", b2["lineStyle"])
+			}
+
+			// Verify position
+			pos, ok := body["position"].(map[string]interface{})
+			if !ok {
+				t.Fatal("Expected 'position' map in request body")
+			}
+			if pos["pageId"] != "page1" {
+				t.Errorf("Expected pageId 'page1', got %v", pos["pageId"])
+			}
+			if pos["position"] != "end" {
+				t.Errorf("Expected position 'end', got %v", pos["position"])
+			}
+
+			response := struct {
+				Items []models.Block `json:"items"`
+			}{
+				Items: []models.Block{
+					{ID: "block1", Type: "text", TextStyle: "h1", Color: "#ef052a"},
+					{ID: "block2", Type: "line", LineStyle: "strong"},
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+		}))
+		defer server.Close()
+
+		client := NewClient(server.URL)
+		blocks := []map[string]interface{}{
+			{"type": "text", "textStyle": "h1", "color": "#ef052a", "markdown": "# Title"},
+			{"type": "line", "lineStyle": "strong"},
+		}
+		position := map[string]interface{}{
+			"pageId":   "page1",
+			"position": "end",
+		}
+
+		result, err := client.AddBlocksJSON(blocks, position)
+		if err != nil {
+			t.Fatalf("AddBlocksJSON() error = %v", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("Expected 2 blocks returned, got %d", len(result))
+		}
+		if result[0].ID != "block1" {
+			t.Errorf("Expected first block ID 'block1', got %s", result[0].ID)
+		}
+	})
+
+	t.Run("sends single block with sibling position", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("Failed to decode: %v", err)
+			}
+
+			pos := body["position"].(map[string]interface{})
+			if pos["siblingId"] != "sib1" {
+				t.Errorf("Expected siblingId 'sib1', got %v", pos["siblingId"])
+			}
+			if pos["position"] != "before" {
+				t.Errorf("Expected position 'before', got %v", pos["position"])
+			}
+
+			response := struct {
+				Items []models.Block `json:"items"`
+			}{Items: []models.Block{{ID: "new1", Type: "text"}}}
+			json.NewEncoder(w).Encode(response)
+		}))
+		defer server.Close()
+
+		client := NewClient(server.URL)
+		blocks := []map[string]interface{}{{"type": "text", "markdown": "Hello"}}
+		position := map[string]interface{}{"siblingId": "sib1", "position": "before"}
+
+		result, err := client.AddBlocksJSON(blocks, position)
+		if err != nil {
+			t.Fatalf("AddBlocksJSON() error = %v", err)
+		}
+		if len(result) != 1 {
+			t.Errorf("Expected 1 block, got %d", len(result))
+		}
+	})
+}
+
+func TestClient_UpdateBlocksJSON(t *testing.T) {
+	t.Run("sends blocks array with styling", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "PUT" {
+				t.Errorf("Expected PUT method, got %s", r.Method)
+			}
+			if r.URL.Path != "/blocks" {
+				t.Errorf("Expected path /blocks, got %s", r.URL.Path)
+			}
+
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("Failed to decode request body: %v", err)
+			}
+
+			blocks, ok := body["blocks"].([]interface{})
+			if !ok {
+				t.Fatal("Expected 'blocks' array in request body")
+			}
+			if len(blocks) != 1 {
+				t.Errorf("Expected 1 block, got %d", len(blocks))
+			}
+
+			b := blocks[0].(map[string]interface{})
+			if b["id"] != "block1" {
+				t.Errorf("Expected id 'block1', got %v", b["id"])
+			}
+			if b["color"] != "#0400ff" {
+				t.Errorf("Expected color '#0400ff', got %v", b["color"])
+			}
+			if b["font"] != "serif" {
+				t.Errorf("Expected font 'serif', got %v", b["font"])
+			}
+			if b["textStyle"] != "h2" {
+				t.Errorf("Expected textStyle 'h2', got %v", b["textStyle"])
+			}
+
+			json.NewEncoder(w).Encode(map[string]interface{}{"items": []interface{}{}})
+		}))
+		defer server.Close()
+
+		client := NewClient(server.URL)
+		blocks := []map[string]interface{}{
+			{"id": "block1", "color": "#0400ff", "font": "serif", "textStyle": "h2"},
+		}
+
+		err := client.UpdateBlocksJSON(blocks)
+		if err != nil {
+			t.Fatalf("UpdateBlocksJSON() error = %v", err)
+		}
+	})
+
+	t.Run("sends multiple blocks", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("Failed to decode: %v", err)
+			}
+
+			blocks := body["blocks"].([]interface{})
+			if len(blocks) != 2 {
+				t.Errorf("Expected 2 blocks, got %d", len(blocks))
+			}
+
+			b1 := blocks[0].(map[string]interface{})
+			b2 := blocks[1].(map[string]interface{})
+			if b1["id"] != "a" {
+				t.Errorf("Expected id 'a', got %v", b1["id"])
+			}
+			if b2["id"] != "b" {
+				t.Errorf("Expected id 'b', got %v", b2["id"])
+			}
+
+			json.NewEncoder(w).Encode(map[string]interface{}{"items": []interface{}{}})
+		}))
+		defer server.Close()
+
+		client := NewClient(server.URL)
+		blocks := []map[string]interface{}{
+			{"id": "a", "markdown": "Updated A"},
+			{"id": "b", "color": "#ff0000"},
+		}
+
+		err := client.UpdateBlocksJSON(blocks)
+		if err != nil {
+			t.Fatalf("UpdateBlocksJSON() error = %v", err)
 		}
 	})
 }

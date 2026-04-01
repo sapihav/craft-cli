@@ -1,0 +1,258 @@
+package cmd
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
+
+var whiteboardsCmd = &cobra.Command{
+	Use:   "whiteboards",
+	Short: "Manage whiteboards (experimental)",
+	Long: `Manage Craft whiteboards - create, get elements, add, update, and delete elements.
+
+Whiteboards use Excalidraw-format elements.
+
+Examples:
+  craft whiteboards create PAGE_ID                    # Create whiteboard in page
+  craft whiteboards get WHITEBOARD_ID                 # Get elements
+  craft whiteboards add WHITEBOARD_ID --json '[...]'  # Add elements
+  craft whiteboards update WHITEBOARD_ID --json '[...]' # Update elements
+  craft whiteboards delete WHITEBOARD_ID --ids "id1,id2" # Delete elements`,
+}
+
+var whiteboardCreateCmd = &cobra.Command{
+	Use:   "create PAGE_ID",
+	Short: "Create a new whiteboard in a document",
+	Long: `Create an empty whiteboard block inside a document page.
+
+Examples:
+  craft whiteboards create abc123
+  craft whiteboards create abc123 --dry-run`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if isDryRun() {
+			fmt.Printf("[dry-run] Would create whiteboard in page: %s\n", args[0])
+			return nil
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		result, err := client.CreateWhiteboard(args[0])
+		if err != nil {
+			return err
+		}
+
+		return outputJSON(result)
+	},
+}
+
+var whiteboardGetCmd = &cobra.Command{
+	Use:   "get WHITEBOARD_ID",
+	Short: "Get whiteboard elements",
+	Long: `Retrieve all elements from a whiteboard in Excalidraw format.
+
+Examples:
+  craft whiteboards get abc123
+  craft whiteboards get abc123 --quiet`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		result, err := client.GetWhiteboardElements(args[0])
+		if err != nil {
+			return err
+		}
+
+		return outputJSON(result)
+	},
+}
+
+var (
+	whiteboardJSON string
+	whiteboardIDs  string
+)
+
+var whiteboardAddCmd = &cobra.Command{
+	Use:   "add WHITEBOARD_ID",
+	Short: "Add elements to a whiteboard",
+	Long: `Append new elements to a whiteboard. Elements use Excalidraw format.
+
+Examples:
+  craft whiteboards add WB_ID --json '[{"type":"rectangle","x":0,"y":0,"width":100,"height":100}]'
+  echo '[{"type":"text","x":50,"y":50,"text":"Hello"}]' | craft whiteboards add WB_ID --stdin`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		data := whiteboardJSON
+		if data == "" {
+			stdinFlag, _ := cmd.Flags().GetBool("stdin")
+			if stdinFlag {
+				d, err := readStdinString()
+				if err != nil {
+					return err
+				}
+				data = d
+			}
+		}
+		if data == "" {
+			return fmt.Errorf("provide --json or --stdin with element data")
+		}
+
+		if isDryRun() {
+			fmt.Printf("[dry-run] Would add elements to whiteboard %s:\n%s\n", args[0], data)
+			return nil
+		}
+
+		var elements []map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &elements); err != nil {
+			// Try single element
+			var single map[string]interface{}
+			if err2 := json.Unmarshal([]byte(data), &single); err2 != nil {
+				return fmt.Errorf("invalid JSON: %w", err)
+			}
+			elements = []map[string]interface{}{single}
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		result, err := client.AddWhiteboardElements(args[0], elements)
+		if err != nil {
+			return err
+		}
+
+		return outputJSON(result)
+	},
+}
+
+var whiteboardUpdateCmd = &cobra.Command{
+	Use:   "update WHITEBOARD_ID",
+	Short: "Update whiteboard elements",
+	Long: `Update specific elements in a whiteboard. Each element must include an "id" field.
+
+Examples:
+  craft whiteboards update WB_ID --json '[{"id":"elem1","x":50,"y":50}]'`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		data := whiteboardJSON
+		if data == "" {
+			stdinFlag, _ := cmd.Flags().GetBool("stdin")
+			if stdinFlag {
+				d, err := readStdinString()
+				if err != nil {
+					return err
+				}
+				data = d
+			}
+		}
+		if data == "" {
+			return fmt.Errorf("provide --json or --stdin with element data")
+		}
+
+		if isDryRun() {
+			fmt.Printf("[dry-run] Would update elements in whiteboard %s:\n%s\n", args[0], data)
+			return nil
+		}
+
+		var elements []map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &elements); err != nil {
+			var single map[string]interface{}
+			if err2 := json.Unmarshal([]byte(data), &single); err2 != nil {
+				return fmt.Errorf("invalid JSON: %w", err)
+			}
+			elements = []map[string]interface{}{single}
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		if err := client.UpdateWhiteboardElements(args[0], elements); err != nil {
+			return err
+		}
+
+		if !quietMode {
+			fmt.Println("Whiteboard elements updated successfully")
+		}
+		return nil
+	},
+}
+
+var whiteboardDeleteCmd = &cobra.Command{
+	Use:   "delete WHITEBOARD_ID",
+	Short: "Delete whiteboard elements",
+	Long: `Remove specific elements from a whiteboard by their IDs.
+
+Examples:
+  craft whiteboards delete WB_ID --ids "elem1,elem2"
+  craft whiteboards delete WB_ID --ids "elem1" --dry-run`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if whiteboardIDs == "" {
+			return fmt.Errorf("--ids is required: comma-separated element IDs to delete")
+		}
+
+		ids := strings.Split(whiteboardIDs, ",")
+		for i := range ids {
+			ids[i] = strings.TrimSpace(ids[i])
+		}
+
+		if isDryRun() {
+			fmt.Printf("[dry-run] Would delete %d elements from whiteboard %s: %s\n", len(ids), args[0], whiteboardIDs)
+			return nil
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		if err := client.DeleteWhiteboardElements(args[0], ids); err != nil {
+			return err
+		}
+
+		if !quietMode {
+			fmt.Printf("Deleted %d elements from whiteboard\n", len(ids))
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(whiteboardsCmd)
+
+	whiteboardsCmd.AddCommand(whiteboardCreateCmd)
+	whiteboardsCmd.AddCommand(whiteboardGetCmd)
+	whiteboardsCmd.AddCommand(whiteboardAddCmd)
+	whiteboardsCmd.AddCommand(whiteboardUpdateCmd)
+	whiteboardsCmd.AddCommand(whiteboardDeleteCmd)
+
+	whiteboardAddCmd.Flags().StringVar(&whiteboardJSON, "json", "", "JSON element data (Excalidraw format)")
+	whiteboardAddCmd.Flags().Bool("stdin", false, "Read element data from stdin")
+
+	whiteboardUpdateCmd.Flags().StringVar(&whiteboardJSON, "json", "", "JSON element data with IDs")
+	whiteboardUpdateCmd.Flags().Bool("stdin", false, "Read element data from stdin")
+
+	whiteboardDeleteCmd.Flags().StringVar(&whiteboardIDs, "ids", "", "Comma-separated element IDs to delete")
+}
+
+func readStdinString() (string, error) {
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", fmt.Errorf("failed to read stdin: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}

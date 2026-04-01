@@ -1448,6 +1448,43 @@ func (c *Client) UploadFile(fileData []byte, pageID, date, siblingID, position s
 	return &result, nil
 }
 
+// ========== JSON Block Operations ==========
+
+// AddBlocksJSON adds blocks using raw JSON maps for full styling support.
+// blocks is an array of block maps (type, markdown, textStyle, color, etc.).
+// position specifies where to insert (pageId+position, siblingId+position, or date+position).
+func (c *Client) AddBlocksJSON(blocks []map[string]interface{}, position map[string]interface{}) ([]models.Block, error) {
+	req := map[string]interface{}{
+		"blocks":   blocks,
+		"position": position,
+	}
+
+	data, err := c.doRequest("POST", "/blocks", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Items []models.Block `json:"items"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+
+	return resp.Items, nil
+}
+
+// UpdateBlocksJSON updates blocks using raw JSON maps for full styling support.
+// Each block map must include "id" and any fields to update.
+func (c *Client) UpdateBlocksJSON(blocks []map[string]interface{}) error {
+	req := map[string]interface{}{
+		"blocks": blocks,
+	}
+
+	_, err := c.doRequest("PUT", "/blocks", req)
+	return err
+}
+
 // ========== Enhanced Block Retrieval ==========
 
 // GetBlockWithOptions retrieves a block by ID with optional depth and metadata.
@@ -1474,4 +1511,87 @@ func (c *Client) GetBlockWithOptions(blockID string, maxDepth int, fetchMetadata
 	}
 
 	return &block, nil
+}
+
+// ========== Whiteboards ==========
+
+// CreateWhiteboard creates a new whiteboard block inside a page.
+func (c *Client) CreateWhiteboard(pageID string) (map[string]interface{}, error) {
+	req := map[string]interface{}{
+		"position": map[string]interface{}{
+			"pageId":   pageID,
+			"position": "end",
+		},
+	}
+
+	data, err := c.doRequest("POST", "/whiteboards", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetWhiteboardElements retrieves elements from a whiteboard.
+func (c *Client) GetWhiteboardElements(whiteboardID string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/whiteboards/%s/elements", url.PathEscape(whiteboardID))
+
+	data, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+
+	return result, nil
+}
+
+// AddWhiteboardElements appends elements to a whiteboard.
+func (c *Client) AddWhiteboardElements(whiteboardID string, elements []map[string]interface{}) (map[string]interface{}, error) {
+	req := map[string]interface{}{
+		"elements": elements,
+	}
+
+	path := fmt.Sprintf("/whiteboards/%s/elements", url.PathEscape(whiteboardID))
+	data, err := c.doRequest("POST", path, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+
+	return result, nil
+}
+
+// UpdateWhiteboardElements updates specific whiteboard elements.
+func (c *Client) UpdateWhiteboardElements(whiteboardID string, elements []map[string]interface{}) error {
+	req := map[string]interface{}{
+		"elements": elements,
+	}
+
+	path := fmt.Sprintf("/whiteboards/%s/elements", url.PathEscape(whiteboardID))
+	_, err := c.doRequest("PUT", path, req)
+	return err
+}
+
+// DeleteWhiteboardElements removes elements from a whiteboard.
+func (c *Client) DeleteWhiteboardElements(whiteboardID string, elementIDs []string) error {
+	req := map[string]interface{}{
+		"elementIds": elementIDs,
+	}
+
+	path := fmt.Sprintf("/whiteboards/%s/elements", url.PathEscape(whiteboardID))
+	_, err := c.doRequest("DELETE", path, req)
+	return err
 }
