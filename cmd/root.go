@@ -101,8 +101,8 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 
 Documentation:
-  Full docs:        https://github.com/nerveband/craft-cli
-  Report issues:    https://github.com/nerveband/craft-cli/issues
+  Full docs:        https://github.com/sapihav/craft-cli
+  Report issues:    https://github.com/sapihav/craft-cli/issues
   Craft API docs:   https://support.craft.do/hc/en-us/articles/23702897811612
 `)
 

@@ -100,6 +100,9 @@ Examples:
   echo '[{"type":"text","x":50,"y":50,"text":"Hello"}]' | craft whiteboards add WB_ID --stdin`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "whiteboard ID"); err != nil {
+			return err
+		}
 		data := whiteboardJSON
 		if data == "" {
 			stdinFlag, _ := cmd.Flags().GetBool("stdin")
@@ -154,6 +157,9 @@ Examples:
   craft whiteboards update WB_ID --json '[{"id":"elem1","x":50,"y":50}]'`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "whiteboard ID"); err != nil {
+			return err
+		}
 		data := whiteboardJSON
 		if data == "" {
 			stdinFlag, _ := cmd.Flags().GetBool("stdin")
@@ -210,6 +216,9 @@ Examples:
   craft whiteboards delete WB_ID --ids "elem1" --dry-run`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "whiteboard ID"); err != nil {
+			return err
+		}
 		if whiteboardIDs == "" {
 			return fmt.Errorf("--ids is required: comma-separated element IDs to delete")
 		}

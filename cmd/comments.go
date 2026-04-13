@@ -30,6 +30,9 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockID := args[0]
+		if err := validateResourceID(blockID, "block ID"); err != nil {
+			return err
+		}
 
 		if isDryRun() {
 			return dryRunOutput("add comment", map[string]interface{}{

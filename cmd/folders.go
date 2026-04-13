@@ -61,6 +61,12 @@ var foldersCreateCmd = &cobra.Command{
 			return err
 		}
 
+		if folderParentID != "" {
+			if err := validateResourceID(folderParentID, "parent folder ID"); err != nil {
+				return err
+			}
+		}
+
 		name := args[0]
 		folder, err := client.CreateFolder(name, folderParentID)
 		if err != nil {
@@ -97,6 +103,9 @@ Examples:
 		}
 
 		folderID := args[0]
+		if err := validateResourceID(folderID, "folder ID"); err != nil {
+			return err
+		}
 		targetID := folderTargetID
 		if targetID == "root" {
 			targetID = ""
@@ -135,6 +144,9 @@ var foldersDeleteCmd = &cobra.Command{
 		}
 
 		folderID := args[0]
+		if err := validateResourceID(folderID, "folder ID"); err != nil {
+			return err
+		}
 		if err := client.DeleteFolder(folderID); err != nil {
 			return err
 		}

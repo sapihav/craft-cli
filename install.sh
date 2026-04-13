@@ -2,9 +2,9 @@
 set -e
 
 # Craft CLI Installer
-# Usage: curl -sSL https://raw.githubusercontent.com/nerveband/craft-cli/main/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/sapihav/craft-cli/main/install.sh | bash
 
-REPO="nerveband/craft-cli"
+REPO="sapihav/craft-cli"
 BINARY_NAME="craft"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
@@ -51,14 +51,14 @@ detect_arch() {
 # Get latest release version from GitHub
 get_latest_version() {
     if ! command -v jq &> /dev/null; then
-        error "jq is required but not installed. Install with: brew install jq"
+        error "jq is required but not installed. Install with: brew install jq (macOS) or apt install jq (Linux)"
     fi
-    LATEST_VERSION=$(curl -sS "https://api.github.com/repos/${REPO}/releases/latest" | jq -r '.tag_name')
+    LATEST_VERSION=$(curl -sS "https://api.github.com/repos/${REPO}/releases/latest" | jq -r '.tag_name // empty')
+    if [ -z "$LATEST_VERSION" ]; then
+        error "Failed to get latest version. Check your internet connection or GitHub API rate limits."
+    fi
     if ! echo "$LATEST_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
         error "Unexpected version format: ${LATEST_VERSION}"
-    fi
-    if [ -z "$LATEST_VERSION" ]; then
-        error "Failed to get latest version. Check your internet connection."
     fi
 }
 
@@ -102,7 +102,13 @@ install() {
     if [ -z "$EXPECTED" ]; then
         error "No checksum found for ${ARCHIVE_NAME} in checksums.txt"
     fi
-    ACTUAL=$(shasum -a 256 "${ARCHIVE_NAME}" | awk '{print $1}')
+    if command -v sha256sum &> /dev/null; then
+        ACTUAL=$(sha256sum "${ARCHIVE_NAME}" | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        ACTUAL=$(shasum -a 256 "${ARCHIVE_NAME}" | awk '{print $1}')
+    else
+        error "No SHA-256 tool found. Install coreutils (sha256sum) or shasum."
+    fi
     if [ "$EXPECTED" != "$ACTUAL" ]; then
         error "Checksum mismatch!\n  Expected: ${EXPECTED}\n  Got:      ${ACTUAL}\nThe download may be corrupted or tampered with."
     fi

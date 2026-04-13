@@ -148,6 +148,9 @@ Examples:
 		}
 
 		taskID := args[0]
+		if err := validateResourceID(taskID, "task ID"); err != nil {
+			return err
+		}
 		if err := client.UpdateTask(taskID, taskState, taskScheduleDate, taskDeadlineDate); err != nil {
 			return err
 		}
@@ -177,6 +180,9 @@ var tasksDeleteCmd = &cobra.Command{
 		}
 
 		taskID := args[0]
+		if err := validateResourceID(taskID, "task ID"); err != nil {
+			return err
+		}
 		if err := client.DeleteTask(taskID); err != nil {
 			return err
 		}

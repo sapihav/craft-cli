@@ -75,6 +75,9 @@ Schema formats:
 		}
 
 		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
 		schema, err := client.GetCollectionSchema(collectionID, collectionSchemaFormat)
 		if err != nil {
 			return err
@@ -99,6 +102,9 @@ Default depth is -1 (no limit).`,
 		}
 
 		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
 		items, err := client.GetCollectionItems(collectionID, collectionItemDepth)
 		if err != nil {
 			return err
@@ -135,6 +141,9 @@ Examples:
 		}
 
 		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
 
 		var props map[string]interface{}
 		if collectionItemProps != "" {
@@ -191,6 +200,12 @@ Examples:
 		}
 
 		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
+		if err := validateResourceID(collectionItemID, "item ID"); err != nil {
+			return err
+		}
 
 		var props map[string]interface{}
 		if err := json.Unmarshal([]byte(collectionItemProps), &props); err != nil {
@@ -226,6 +241,12 @@ var collectionsDeleteCmd = &cobra.Command{
 		}
 
 		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
+		if err := validateResourceID(collectionItemID, "item ID"); err != nil {
+			return err
+		}
 		if err := client.DeleteCollectionItem(collectionID, collectionItemID); err != nil {
 			return err
 		}
