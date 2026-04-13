@@ -32,7 +32,7 @@ func TestClient_GetCollections(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollections("")
 		if err != nil {
 			t.Fatalf("GetCollections() error = %v", err)
@@ -72,7 +72,7 @@ func TestClient_GetCollections(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollections("doc1,doc2")
 		if err != nil {
 			t.Fatalf("GetCollections() error = %v", err)
@@ -115,7 +115,7 @@ func TestClient_GetCollectionSchema(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollectionSchema("col1", "")
 		if err != nil {
 			t.Fatalf("GetCollectionSchema() error = %v", err)
@@ -160,7 +160,7 @@ func TestClient_GetCollectionSchema(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollectionSchema("col1", "json")
 		if err != nil {
 			t.Fatalf("GetCollectionSchema() error = %v", err)
@@ -208,7 +208,7 @@ func TestClient_GetCollectionItems(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollectionItems("col1", 0)
 		if err != nil {
 			t.Fatalf("GetCollectionItems() error = %v", err)
@@ -245,7 +245,7 @@ func TestClient_GetCollectionItems(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetCollectionItems("col1", 3)
 		if err != nil {
 			t.Fatalf("GetCollectionItems() error = %v", err)
@@ -304,7 +304,7 @@ func TestClient_AddCollectionItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	props := map[string]interface{}{
 		"status": "Todo",
 	}
@@ -360,7 +360,7 @@ func TestClient_UpdateCollectionItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	props := map[string]interface{}{
 		"status": "Done",
 	}
@@ -397,7 +397,7 @@ func TestClient_DeleteCollectionItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	err := client.DeleteCollectionItem("col1", "item1")
 	if err != nil {
 		t.Fatalf("DeleteCollectionItem() error = %v", err)

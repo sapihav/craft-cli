@@ -50,7 +50,13 @@ detect_arch() {
 
 # Get latest release version from GitHub
 get_latest_version() {
-    LATEST_VERSION=$(curl -sS "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if ! command -v jq &> /dev/null; then
+        error "jq is required but not installed. Install with: brew install jq"
+    fi
+    LATEST_VERSION=$(curl -sS "https://api.github.com/repos/${REPO}/releases/latest" | jq -r '.tag_name')
+    if ! echo "$LATEST_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+        error "Unexpected version format: ${LATEST_VERSION}"
+    fi
     if [ -z "$LATEST_VERSION" ]; then
         error "Failed to get latest version. Check your internet connection."
     fi
@@ -75,16 +81,35 @@ install() {
 
     # Create temp directory
     TMP_DIR=$(mktemp -d)
-    trap "rm -rf $TMP_DIR" EXIT
+    trap 'rm -rf "$TMP_DIR"' EXIT
+
+    CHECKSUM_URL="https://github.com/${REPO}/releases/download/${LATEST_VERSION}/checksums.txt"
 
     info "Downloading from ${DOWNLOAD_URL}..."
     if ! curl -sSL "$DOWNLOAD_URL" -o "${TMP_DIR}/${ARCHIVE_NAME}"; then
         error "Failed to download. Release may not exist yet."
     fi
 
+    info "Downloading checksums..."
+    if ! curl -sSL "$CHECKSUM_URL" -o "${TMP_DIR}/checksums.txt"; then
+        error "Failed to download checksums. Cannot verify integrity."
+    fi
+
+    # Verify checksum
+    info "Verifying checksum..."
+    cd "$TMP_DIR"
+    EXPECTED=$(grep "${ARCHIVE_NAME}" checksums.txt | awk '{print $1}')
+    if [ -z "$EXPECTED" ]; then
+        error "No checksum found for ${ARCHIVE_NAME} in checksums.txt"
+    fi
+    ACTUAL=$(shasum -a 256 "${ARCHIVE_NAME}" | awk '{print $1}')
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+        error "Checksum mismatch!\n  Expected: ${EXPECTED}\n  Got:      ${ACTUAL}\nThe download may be corrupted or tampered with."
+    fi
+    info "Checksum verified."
+
     # Extract
     info "Extracting..."
-    cd "$TMP_DIR"
     if [ "$OS" = "Windows" ]; then
         unzip -q "$ARCHIVE_NAME"
     else
@@ -95,8 +120,9 @@ install() {
     if [ -w "$INSTALL_DIR" ]; then
         mv "$BINARY_NAME" "$INSTALL_DIR/"
     else
-        info "Installing to ${INSTALL_DIR} (requires sudo)..."
-        sudo mv "$BINARY_NAME" "$INSTALL_DIR/"
+        warn "${INSTALL_DIR} is not writable. Run with sudo or set INSTALL_DIR to a writable path:"
+        warn "  INSTALL_DIR=\$HOME/.local/bin bash install.sh"
+        error "Cannot install without write access to ${INSTALL_DIR}"
     fi
 
     # Verify installation

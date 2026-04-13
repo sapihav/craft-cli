@@ -21,6 +21,9 @@ func validateResourceID(id, label string) error {
 	if strings.ContainsAny(id, "?#&=") {
 		return fmt.Errorf("invalid %s: query parameters not allowed in IDs", label)
 	}
+	if strings.ContainsAny(id, "/\\") {
+		return fmt.Errorf("invalid %s: path separators not allowed in IDs", label)
+	}
 	for _, r := range id {
 		if unicode.IsControl(r) {
 			return fmt.Errorf("invalid %s: control characters not allowed", label)

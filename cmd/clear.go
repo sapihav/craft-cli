@@ -17,6 +17,9 @@ WARNING: This operation is destructive. Use --dry-run to preview first.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		docID := args[0]
+		if err := validateResourceID(docID, "document ID"); err != nil {
+			return err
+		}
 		client, err := getAPIClient()
 		if err != nil {
 			return err

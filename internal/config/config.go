@@ -80,7 +80,7 @@ func (m *Manager) Load() (*Config, error) {
 // Save writes the configuration file
 func (m *Manager) Save(cfg *Config) error {
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(m.configDir, 0755); err != nil {
+	if err := os.MkdirAll(m.configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -89,7 +89,7 @@ func (m *Manager) Save(cfg *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
+	if err := os.WriteFile(m.configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

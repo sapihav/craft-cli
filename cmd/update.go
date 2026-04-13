@@ -48,6 +48,9 @@ Examples:
 		}
 
 		docID := args[0]
+		if err := validateResourceID(docID, "document ID"); err != nil {
+			return err
+		}
 
 		mode := updateMode
 		if mode == "" {

@@ -31,7 +31,7 @@ func TestClient_GetConnection(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	result, err := client.GetConnection()
 
 	if err != nil {
@@ -90,7 +90,7 @@ func TestClient_AddComment(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	result, err := client.AddComment("block-abc", "Nice work!")
 
 	if err != nil {
@@ -149,7 +149,7 @@ func TestClient_SearchBlocks(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.SearchBlocks("doc-1", "hello", false, 5, 5)
 
 		if err != nil {
@@ -190,7 +190,7 @@ func TestClient_SearchBlocks(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		_, err := client.SearchBlocks("doc-1", "Hello", true, 3, 10)
 		if err != nil {
 			t.Fatalf("SearchBlocks() error = %v", err)
@@ -238,7 +238,7 @@ func TestClient_SearchDocumentsAdvanced(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		opts := SearchOptions{
 			Location:            "personal",
 			FolderIDs:           "folder-1",
@@ -279,7 +279,7 @@ func TestClient_SearchDocumentsAdvanced(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.SearchDocumentsAdvanced("test", SearchOptions{})
 		if err != nil {
 			t.Fatalf("SearchDocumentsAdvanced() error = %v", err)
@@ -327,7 +327,7 @@ func TestClient_GetDocumentsAdvanced(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		opts := ListDocumentsOptions{
 			FolderID:         "folder-abc",
 			Location:         "personal",
@@ -363,7 +363,7 @@ func TestClient_GetDocumentsAdvanced(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetDocumentsAdvanced(ListDocumentsOptions{})
 		if err != nil {
 			t.Fatalf("GetDocumentsAdvanced() error = %v", err)
@@ -407,7 +407,7 @@ func TestClient_GetBlockByDate(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetBlockByDate("2025-01-15", 3, true)
 
 		if err != nil {
@@ -446,7 +446,7 @@ func TestClient_GetBlockByDate(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetBlockByDate("2025-06-01", -1, false)
 		if err != nil {
 			t.Fatalf("GetBlockByDate() error = %v", err)
@@ -504,7 +504,7 @@ func TestClient_AddBlockToDate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	result, err := client.AddBlockToDate("2025-01-15", "New daily note entry", "end")
 
 	if err != nil {
@@ -562,7 +562,7 @@ func TestClient_UploadFile(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.UploadFile(fileContent, "page-123", "", "", "end")
 
 		if err != nil {
@@ -595,7 +595,7 @@ func TestClient_UploadFile(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.UploadFile([]byte("pdf-data"), "", "2025-01-15", "", "start")
 		if err != nil {
 			t.Fatalf("UploadFile() error = %v", err)
@@ -623,7 +623,7 @@ func TestClient_UploadFile(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.UploadFile([]byte("jpg-data"), "", "", "sibling-xyz", "after")
 		if err != nil {
 			t.Fatalf("UploadFile() error = %v", err)
@@ -671,7 +671,7 @@ func TestClient_GetBlockWithOptions(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetBlockWithOptions("block-456", 2, true)
 
 		if err != nil {
@@ -717,7 +717,7 @@ func TestClient_GetBlockWithOptions(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		result, err := client.GetBlockWithOptions("block-789", -1, false)
 		if err != nil {
 			t.Fatalf("GetBlockWithOptions() error = %v", err)

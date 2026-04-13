@@ -151,8 +151,11 @@ func getAPIClient() (*api.Client, error) {
 		}
 	}
 
-	// Get API key: flag > config > empty
+	// Get API key: flag > env var > config > empty
 	key := apiKey
+	if key == "" {
+		key = os.Getenv("CRAFT_API_KEY")
+	}
 	if key == "" {
 		var err error
 		key, err = cfgManager.GetActiveAPIKey()
@@ -162,9 +165,9 @@ func getAPIClient() (*api.Client, error) {
 	}
 
 	if key != "" {
-		return api.NewClientWithKey(url, key), nil
+		return api.NewClientWithKey(url, key)
 	}
-	return api.NewClient(url), nil
+	return api.NewClient(url)
 }
 
 // getOutputFormat returns the output format to use

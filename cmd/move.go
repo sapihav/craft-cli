@@ -26,8 +26,16 @@ Examples:
   craft move abc123 --to-location trash    # Move to trash`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(args[0], "document ID"); err != nil {
+			return err
+		}
 		if moveTargetFolder == "" && moveTargetLocation == "" {
 			return fmt.Errorf("either --to-folder or --to-location is required")
+		}
+		if moveTargetFolder != "" {
+			if err := validateResourceID(moveTargetFolder, "target folder ID"); err != nil {
+				return err
+			}
 		}
 
 		if isDryRun() {

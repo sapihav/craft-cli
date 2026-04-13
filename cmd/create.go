@@ -56,6 +56,12 @@ Examples:
 			return err
 		}
 
+		if createParentID != "" {
+			if err := validateResourceID(createParentID, "parent ID"); err != nil {
+				return err
+			}
+		}
+
 		req := &models.CreateDocumentRequest{
 			Title:    createTitle,
 			ParentID: createParentID,

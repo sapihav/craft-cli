@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const repoOwner = "nerveband"
+const repoOwner = "sapihav"
 const repoName = "craft-cli"
 
 // updateCheckCache stores the last version check
@@ -124,7 +124,7 @@ func saveUpdateCache(cache updateCheckCache) error {
 	}
 
 	configDir := filepath.Join(homeDir, config.ConfigDirName)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return err
 	}
 
@@ -134,7 +134,7 @@ func saveUpdateCache(cache updateCheckCache) error {
 		return err
 	}
 
-	return os.WriteFile(cachePath, data, 0644)
+	return os.WriteFile(cachePath, data, 0600)
 }
 
 var upgradeCmd = &cobra.Command{
@@ -167,7 +167,10 @@ func runUpgrade() error {
 		return fmt.Errorf("failed to create updater: %w", err)
 	}
 
-	latest, found, err := updater.DetectLatest(context.Background(), selfupdate.NewRepositorySlug(repoOwner, repoName))
+	upgradeCtx, upgradeCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer upgradeCancel()
+
+	latest, found, err := updater.DetectLatest(upgradeCtx, selfupdate.NewRepositorySlug(repoOwner, repoName))
 	if err != nil {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
@@ -190,7 +193,7 @@ func runUpgrade() error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	if err := updater.UpdateTo(context.Background(), latest, exe); err != nil {
+	if err := updater.UpdateTo(upgradeCtx, latest, exe); err != nil {
 		return fmt.Errorf("failed to update: %w", err)
 	}
 

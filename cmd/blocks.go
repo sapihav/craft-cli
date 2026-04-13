@@ -321,6 +321,9 @@ var blocksDeleteCmd = &cobra.Command{
 		}
 
 		blockID := args[0]
+		if err := validateResourceID(blockID, "block ID"); err != nil {
+			return err
+		}
 		if err := client.DeleteBlock(blockID); err != nil {
 			return err
 		}
@@ -361,6 +364,12 @@ Examples:
 		}
 
 		blockID := args[0]
+		if err := validateResourceID(blockID, "block ID"); err != nil {
+			return err
+		}
+		if err := validateResourceID(blockTargetPage, "target page ID"); err != nil {
+			return err
+		}
 		if err := client.MoveBlock(blockID, blockTargetPage, blockPosition); err != nil {
 			return err
 		}

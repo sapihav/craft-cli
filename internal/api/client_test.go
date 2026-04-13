@@ -11,7 +11,10 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("https://api.example.com")
+	client, err := NewClient("https://api.example.com")
+	if err != nil {
+		t.Fatalf("NewClient returned unexpected error: %v", err)
+	}
 
 	if client.baseURL != "https://api.example.com" {
 		t.Errorf("baseURL = %v, want https://api.example.com", client.baseURL)
@@ -19,6 +22,20 @@ func TestNewClient(t *testing.T) {
 
 	if client.httpClient == nil {
 		t.Error("httpClient should not be nil")
+	}
+}
+
+func TestNewClient_RejectsHTTP(t *testing.T) {
+	_, err := NewClient("http://api.example.com")
+	if err == nil {
+		t.Error("NewClient should reject http:// URLs")
+	}
+}
+
+func TestNewClient_RejectsEmpty(t *testing.T) {
+	_, err := NewClient("")
+	if err == nil {
+		t.Error("NewClient should reject empty URLs")
 	}
 }
 
@@ -49,7 +66,7 @@ func TestClient_GetDocuments(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	docs, err := client.GetDocuments()
 
 	if err != nil {
@@ -99,7 +116,7 @@ func TestClient_GetDocument(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	doc, err := client.GetDocument("doc1")
 
 	if err != nil {
@@ -145,7 +162,7 @@ func TestClient_SearchDocuments(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	results, err := client.SearchDocuments("test query")
 
 	if err != nil {
@@ -244,7 +261,7 @@ func TestClient_CreateDocument(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL)
+	client := newTestClient(server.URL)
 	req := &models.CreateDocumentRequest{
 		Title:    "New Document",
 		Markdown: "Test content",
@@ -292,7 +309,7 @@ func TestClient_UpdateDocument(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		req := &models.UpdateDocumentRequest{Title: "Updated Document"}
 		_, err := client.UpdateDocument("doc1", req)
 		if err != nil {
@@ -349,7 +366,7 @@ func TestClient_UpdateDocument(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		req := &models.UpdateDocumentRequest{
 			Markdown: "Updated content",
 		}
@@ -388,7 +405,7 @@ func TestClient_DeleteDocument(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		err := client.DeleteDocument("doc1")
 		if err != nil {
 			t.Fatalf("DeleteDocument() error = %v", err)
@@ -448,7 +465,7 @@ func TestClient_ClearDocumentContent(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		count, err := client.ClearDocumentContent("doc1")
 		if err != nil {
 			t.Fatalf("ClearDocumentContent() error = %v", err)
@@ -465,7 +482,7 @@ func TestClient_ClearDocumentContent(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		count, err := client.ClearDocumentContent("doc1")
 		if err != nil {
 			t.Fatalf("Expected no error for empty document, got: %v", err)
@@ -545,7 +562,7 @@ func TestClient_AddBlocksJSON(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		blocks := []map[string]interface{}{
 			{"type": "text", "textStyle": "h1", "color": "#ef052a", "markdown": "# Title"},
 			{"type": "line", "lineStyle": "strong"},
@@ -589,7 +606,7 @@ func TestClient_AddBlocksJSON(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		blocks := []map[string]interface{}{{"type": "text", "markdown": "Hello"}}
 		position := map[string]interface{}{"siblingId": "sib1", "position": "before"}
 
@@ -644,7 +661,7 @@ func TestClient_UpdateBlocksJSON(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		blocks := []map[string]interface{}{
 			{"id": "block1", "color": "#0400ff", "font": "serif", "textStyle": "h2"},
 		}
@@ -680,7 +697,7 @@ func TestClient_UpdateBlocksJSON(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(server.URL)
+		client := newTestClient(server.URL)
 		blocks := []map[string]interface{}{
 			{"id": "a", "markdown": "Updated A"},
 			{"id": "b", "color": "#ff0000"},
@@ -719,7 +736,7 @@ func TestClient_ErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewClient(server.URL)
+			client := newTestClient(server.URL)
 			_, err := client.GetDocuments()
 
 			if err == nil {

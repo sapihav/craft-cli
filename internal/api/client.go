@@ -18,6 +18,8 @@ const (
 	defaultTimeout = 30 * time.Second
 	// defaultInsertChunkBytes is a conservative default to avoid Craft API payload limits.
 	defaultInsertChunkBytes = 30000
+	// maxResponseBytes caps response body reads to prevent memory exhaustion (50 MB).
+	maxResponseBytes = 50 * 1024 * 1024
 )
 
 // APIError represents an error response from Craft.
@@ -50,25 +52,66 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new API client
-func NewClient(baseURL string) *Client {
-	return &Client{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: defaultTimeout,
+// newHTTPClient creates an http.Client with secure defaults.
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: defaultTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			// Strip Authorization header on cross-origin or scheme-downgrade redirects.
+			if len(via) > 0 {
+				prev := via[len(via)-1].URL
+				if req.URL.Host != prev.Host || (prev.Scheme == "https" && req.URL.Scheme == "http") {
+					req.Header.Del("Authorization")
+				}
+			}
+			return nil
 		},
 	}
 }
 
-// NewClientWithKey creates a new API client with an API key
-func NewClientWithKey(baseURL, apiKey string) *Client {
-	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		httpClient: &http.Client{
-			Timeout: defaultTimeout,
-		},
+// validateBaseURL ensures the URL uses HTTPS.
+func validateBaseURL(baseURL string) error {
+	if baseURL == "" {
+		return fmt.Errorf("base URL cannot be empty")
 	}
+	if !strings.HasPrefix(strings.ToLower(baseURL), "https://") {
+		return fmt.Errorf("base URL must use HTTPS (got %q)", baseURL)
+	}
+	return nil
+}
+
+// newTestClient creates a client without URL validation (for tests with httptest servers).
+func newTestClient(baseURL string) *Client {
+	return &Client{
+		baseURL:    baseURL,
+		httpClient: newHTTPClient(),
+	}
+}
+
+// NewClient creates a new API client. Returns an error if the URL is not HTTPS.
+func NewClient(baseURL string) (*Client, error) {
+	if err := validateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
+	return &Client{
+		baseURL:    baseURL,
+		httpClient: newHTTPClient(),
+	}, nil
+}
+
+// NewClientWithKey creates a new API client with an API key. Returns an error if the URL is not HTTPS.
+func NewClientWithKey(baseURL, apiKey string) (*Client, error) {
+	if err := validateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
+	return &Client{
+		baseURL:    baseURL,
+		apiKey:     apiKey,
+		httpClient: newHTTPClient(),
+	}, nil
 }
 
 // doRequest performs an HTTP request and handles errors
@@ -103,7 +146,7 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -1412,7 +1455,7 @@ func (c *Client) doRequestRaw(method, path string, body []byte, contentType stri
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}

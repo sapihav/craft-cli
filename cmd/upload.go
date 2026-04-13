@@ -67,6 +67,18 @@ Examples:
 			fileName = filepath.Base(filePath)
 		}
 
+		// Validate IDs
+		if uploadPageID != "" {
+			if err := validateResourceID(uploadPageID, "page ID"); err != nil {
+				return err
+			}
+		}
+		if uploadSiblingID != "" {
+			if err := validateResourceID(uploadSiblingID, "sibling ID"); err != nil {
+				return err
+			}
+		}
+
 		// Validate placement: at least one of --page, --date, --sibling must be provided
 		if uploadPageID == "" && uploadDate == "" && uploadSiblingID == "" {
 			return fmt.Errorf("at least one of --page, --date, or --sibling is required")

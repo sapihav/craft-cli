@@ -53,6 +53,9 @@ Block search (with --document):
 
 		// Block search mode: --document is set
 		if searchDocument != "" {
+			if err := validateResourceID(searchDocument, "document ID"); err != nil {
+				return err
+			}
 			return runBlockSearch(client, args, format)
 		}
 
