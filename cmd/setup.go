@@ -115,6 +115,18 @@ func runSetup() error {
 		return fmt.Errorf("API URL cannot be empty")
 	}
 
+	// Ask for API key
+	fmt.Println()
+	fmt.Println("  Most API connections require an API key.")
+	fmt.Println("  You can find it in Craft: Imagine tab → API Connection → API Key")
+	fmt.Println()
+	fmt.Print("Paste your API key (or press Enter to skip): ")
+	apiKeyInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+	apiKeyInput = strings.TrimSpace(apiKeyInput)
+
 	// Get profile name
 	fmt.Println()
 	fmt.Print("Give this profile a name (e.g., work, personal): ")
@@ -130,7 +142,7 @@ func runSetup() error {
 	}
 
 	// Save profile
-	if err := cfgManager.AddProfile(profileName, apiURL); err != nil {
+	if err := cfgManager.AddProfileWithKey(profileName, apiURL, apiKeyInput); err != nil {
 		return fmt.Errorf("failed to save profile: %w", err)
 	}
 
