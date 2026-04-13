@@ -44,6 +44,7 @@ archives:
 
 checksum:
   name_template: 'checksums.txt'
+  algorithm: sha256
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
@@ -61,7 +62,17 @@ changelog:
 
 release:
   github:
-    owner: nerveband
+    owner: sapihav
     name: craft-cli
   draft: false
   prerelease: auto
+
+brews:
+  - repository:
+      owner: sapihav
+      name: homebrew-tap
+    homepage: https://github.com/sapihav/craft-cli
+    description: CLI for interacting with Craft.do documents
+    license: MIT
+    install: |
+      bin.install "craft"
