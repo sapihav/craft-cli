@@ -173,6 +173,9 @@ func getAPIClient() (*api.Client, error) {
 // getOutputFormat returns the output format to use
 func getOutputFormat() string {
 	if outputFormat != "" {
+		if outputFormat == "md" {
+			return "markdown"
+		}
 		return outputFormat
 	}
 

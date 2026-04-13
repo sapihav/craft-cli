@@ -145,6 +145,9 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format := args[0]
+		if format == "md" {
+			format = "markdown"
+		}
 		switch format {
 		case "json", "compact", "table", "markdown":
 		default:
