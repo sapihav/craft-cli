@@ -128,6 +128,36 @@ var listProfilesCmd = &cobra.Command{
 	},
 }
 
+var setFormatCmd = &cobra.Command{
+	Use:   "format <format>",
+	Short: "Set default output format",
+	Long: `Set the default output format for all commands.
+
+Available formats:
+  json      Full JSON with metadata envelope (best for LLMs/scripts)
+  compact   Minimal JSON array (token-efficient)
+  table     Human-readable columns (best for terminal use)
+  markdown  Rich markdown output
+
+Examples:
+  craft config format table
+  craft config format json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		format := args[0]
+		switch format {
+		case "json", "compact", "table", "markdown":
+		default:
+			return fmt.Errorf("invalid format %q — must be one of: json, compact, table, markdown", format)
+		}
+		if err := cfgManager.SetDefaultFormat(format); err != nil {
+			return fmt.Errorf("failed to set format: %w", err)
+		}
+		fmt.Printf("Default format set to '%s'\n", format)
+		return nil
+	},
+}
+
 var forceReset bool
 
 var resetCmd = &cobra.Command{
@@ -169,6 +199,7 @@ func init() {
 	configCmd.AddCommand(removeProfileCmd)
 	configCmd.AddCommand(useProfileCmd)
 	configCmd.AddCommand(listProfilesCmd)
+	configCmd.AddCommand(setFormatCmd)
 	configCmd.AddCommand(resetCmd)
 
 	addProfileCmd.Flags().StringVarP(&profileAPIKey, "key", "k", "", "API key for authentication")

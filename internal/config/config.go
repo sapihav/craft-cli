@@ -225,6 +225,16 @@ func (m *Manager) GetActiveAPIKey() (string, error) {
 	return profile.APIKey, nil
 }
 
+// SetDefaultFormat sets the default output format
+func (m *Manager) SetDefaultFormat(format string) error {
+	cfg, err := m.Load()
+	if err != nil {
+		return err
+	}
+	cfg.DefaultFormat = format
+	return m.Save(cfg)
+}
+
 // Reset clears the configuration
 func (m *Manager) Reset() error {
 	if err := os.RemoveAll(m.configPath); err != nil && !os.IsNotExist(err) {
