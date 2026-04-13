@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 const craftLogo = `
@@ -121,11 +122,15 @@ func runSetup() error {
 	fmt.Println("  You can find it in Craft: Imagine tab → API Connection → API Key")
 	fmt.Println()
 	fmt.Print("Paste your API key (or press Enter to skip): ")
-	apiKeyInput, err := reader.ReadString('\n')
+	apiKeyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println() // newline after hidden input
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return fmt.Errorf("failed to read API key: %w", err)
 	}
-	apiKeyInput = strings.TrimSpace(apiKeyInput)
+	apiKeyInput := strings.TrimSpace(string(apiKeyBytes))
+	if apiKeyInput != "" {
+		fmt.Println("  API key received.")
+	}
 
 	// Get profile name
 	fmt.Println()
