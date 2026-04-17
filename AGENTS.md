@@ -4,6 +4,12 @@
 
 craft-cli is a Go binary for managing Craft.do documents. JSON output by default. 30+ commands covering documents, blocks, folders, tasks, collections, whiteboards, comments, uploads, and search.
 
+## Sources of truth
+
+- `README.md` — install + usage
+- `docs/backlog/_index.md` — feature/bug/idea queue. See `.claude/rules/backlog.md` for the workflow. Use `/feature-create`, `/bug-fix` (global skills) which already write to `docs/backlog/`.
+- `.claude/rules/incremental-delivery.md` — 1 milestone = 1 PR, ≤500 LoC source code.
+
 ## Auth
 
 No interactive login. Set credentials via:
