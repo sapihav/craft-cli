@@ -126,6 +126,32 @@ craft clear <document-id>
 craft delete <document-id> --dry-run
 ```
 
+### Collection Operations
+
+```bash
+# List collections (optionally filter by document)
+craft collections list
+craft collections list --document <doc-id>
+
+# Read a collection's schema
+craft collections schema <collection-id>
+
+# Create a new collection in a document
+craft collections create --doc <doc-id> --name "Tasks"
+craft collections create --doc <doc-id> --name "Tasks" --icon "✅" --description "All tasks"
+craft collections create --doc <doc-id> --name "Tasks" --schema @schema.json
+
+# Replace a collection's schema (inline JSON or @file)
+craft collections schema update <collection-id> --schema @schema.json
+craft collections schema update <collection-id> --schema '{"properties":[]}' --dry-run
+
+# Items: list / add / update / delete
+craft collections items <collection-id>
+craft collections add <collection-id> --title "New Item"
+craft collections update <collection-id> --item <item-id> --properties '{"Status":"Done"}'
+craft collections delete <collection-id> --item <item-id>
+```
+
 ### Multi-Profile Management
 
 Store and switch between multiple Craft API connections:

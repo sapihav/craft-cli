@@ -1041,6 +1041,92 @@ func (c *Client) GetCollections(documentIDs string) (*models.CollectionList, err
 	return &result, nil
 }
 
+// createCollectionRequest wraps a CreateCollectionRequest for the API.
+// The API uses a `{"collections":[…]}` envelope, mirroring `POST /folders` and `POST /documents`.
+type createCollectionRequest struct {
+	Collections []models.CreateCollectionRequest `json:"collections"`
+}
+
+// createCollectionResponse represents the API response for collection creation.
+type createCollectionResponse struct {
+	Items []models.Collection `json:"items"`
+}
+
+// CreateCollection creates a new collection inside a document.
+//
+// Endpoint: POST /collections
+// The Craft REST API does not publicly document the create-collection shape; the request
+// envelope mirrors the existing `POST /folders` and `POST /documents` patterns
+// (`{"<resource>":[ {…} ]}`), and the response is parsed as a CollectionList.
+func (c *Client) CreateCollection(req *models.CreateCollectionRequest) (*models.Collection, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is required")
+	}
+	if req.DocumentID == "" {
+		return nil, fmt.Errorf("documentId is required")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+
+	wrapper := createCollectionRequest{
+		Collections: []models.CreateCollectionRequest{*req},
+	}
+
+	data, err := c.doRequest("POST", "/collections", wrapper)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp createCollectionResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+	if len(resp.Items) == 0 {
+		return nil, fmt.Errorf("no collection returned from API")
+	}
+
+	created := resp.Items[0]
+	if created.DocumentID == "" {
+		created.DocumentID = req.DocumentID
+	}
+	if created.Name == "" {
+		created.Name = req.Name
+	}
+	return &created, nil
+}
+
+// UpdateCollectionSchema replaces a collection's schema.
+//
+// Endpoint: PUT /collections/{id}/schema (mirrors the read path used by GetCollectionSchema).
+// The schema body is sent as-is; if the API echoes the updated schema, it is returned.
+// On a 2xx with an empty/non-JSON body, returns (nil, nil) to indicate success.
+func (c *Client) UpdateCollectionSchema(collectionID string, schema interface{}) (*models.CollectionSchema, error) {
+	if collectionID == "" {
+		return nil, fmt.Errorf("collection ID is required")
+	}
+	if schema == nil {
+		return nil, fmt.Errorf("schema is required")
+	}
+
+	path := fmt.Sprintf("/collections/%s/schema", url.PathEscape(collectionID))
+	data, err := c.doRequest("PUT", path, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+
+	var result models.CollectionSchema
+	if err := json.Unmarshal(data, &result); err != nil {
+		// API returned a non-schema 2xx body (e.g. {"ok":true}); treat as success.
+		return nil, nil
+	}
+	return &result, nil
+}
+
 // GetCollectionSchema retrieves the schema for a collection
 func (c *Client) GetCollectionSchema(collectionID, format string) (*models.CollectionSchema, error) {
 	path := fmt.Sprintf("/collections/%s/schema", url.PathEscape(collectionID))

@@ -75,9 +75,9 @@ called out under "CLI-only / REST-only" below.
 | MCP tool                   | CLI command                  | Status        | Notes |
 |----------------------------|------------------------------|---------------|-------|
 | `collections_list`         | `craft collections list`     | shipped       | `--document` filter supported. |
-| `collections_create`       | _none_                       | planned (M1)  | One of the "4 MCP gaps". |
-| `collectionSchema_get`     | `craft collections schema`   | shipped       | |
-| `collectionSchema_update`  | _none_                       | planned (M1)  | Second of M1's pair. |
+| `collections_create`       | `craft collections create`         | shipped       | M1. POST /collections. |
+| `collectionSchema_get`     | `craft collections schema`         | shipped       | |
+| `collectionSchema_update`  | `craft collections schema update`  | shipped       | M1. PUT /collections/{id}/schema. |
 | `collectionItems_get`      | `craft collections items`    | shipped       | List form; per-item GET not exposed. ? — verify whether MCP `collectionItems_get` is per-item or list. |
 | `collectionItems_add`      | `craft collections add`      | shipped       | |
 | `collectionItems_update`   | `craft collections update`   | shipped       | |
@@ -137,17 +137,17 @@ parity gaps — out of MCP scope by design.
 
 ### The "4 MCP gaps" the backlog set out to close
 
-Checked against the current `cmd/` tree. As of 2026-04-25, all four are still
-**open** — no milestone has shipped yet:
+Checked against the current `cmd/` tree. As of 2026-04-25, M1 has shipped
+and closed the two collection-authoring gaps:
 
-| # | MCP tool                  | Milestone | Open? |
-|---|---------------------------|-----------|-------|
-| 1 | `collections_create`      | M1        | open  |
-| 2 | `collectionSchema_update` | M1        | open  |
-| 3 | `blocks_revert`           | M2        | open  |
+| # | MCP tool                  | Milestone | Open?  |
+|---|---------------------------|-----------|--------|
+| 1 | `collections_create`      | M1        | closed |
+| 2 | `collectionSchema_update` | M1        | closed |
+| 3 | `blocks_revert`           | M2        | open   |
 | 4 | `blocks search` wiring    | M2        | partially closed — `SearchBlocks` is **already** wired via `craft search --document`; M2 only adds a redundant `blocks search` alias. The "dead code" framing in the M2 task file is inaccurate. |
 
-So **3 of 4 are genuine gaps**; the 4th is a cosmetic alias.
+So 2 of 4 closed in M1; the remaining `blocks_revert` is the last genuine gap, with `blocks search` being a cosmetic alias.
 
 ### Additional gaps not mentioned in the backlog
 

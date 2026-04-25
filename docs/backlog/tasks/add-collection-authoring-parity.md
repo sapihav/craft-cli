@@ -2,7 +2,7 @@
 title: M1 — collection authoring parity (create + schema update)
 type: task
 priority: P1
-status: todo
+status: done
 created: 2026-04-18
 ---
 

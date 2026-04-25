@@ -4,11 +4,39 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/ashrafali/craft-cli/internal/models"
 	"github.com/spf13/cobra"
 )
+
+// readSchemaInput accepts either inline JSON or a `@filename` reference and
+// returns the parsed JSON value. Used by `collections create --schema` and
+// `collections schema update --schema`.
+func readSchemaInput(input string) (interface{}, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return nil, fmt.Errorf("schema input is empty")
+	}
+	raw := []byte(trimmed)
+	if strings.HasPrefix(trimmed, "@") {
+		path := strings.TrimSpace(trimmed[1:])
+		if path == "" {
+			return nil, fmt.Errorf("--schema @filename: filename is empty")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read schema file %q: %w", path, err)
+		}
+		raw = data
+	}
+	var parsed interface{}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("invalid schema JSON: %w", err)
+	}
+	return parsed, nil
+}
 
 var collectionsCmd = &cobra.Command{
 	Use:   "collections",
@@ -33,6 +61,10 @@ var (
 	collectionItemProps     string
 	collectionAllowNew      bool
 	collectionItemID        string
+	collectionCreateName    string
+	collectionCreateDesc    string
+	collectionCreateIcon    string
+	collectionSchemaInput   string
 )
 
 var collectionsListCmd = &cobra.Command{
@@ -84,6 +116,144 @@ Schema formats:
 		}
 
 		return outputJSON(schema)
+	},
+}
+
+var collectionsCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new collection in a document",
+	Long: `Create a new collection (database) inside a Craft document.
+
+Required flags:
+  --doc       The document ID where the collection will be created
+  --name      The display name of the collection
+
+Optional flags:
+  --description   Short description shown under the name
+  --icon          Emoji or icon identifier
+  --schema        Initial schema as inline JSON or @file (e.g. @schema.json)
+
+Examples:
+  craft collections create --doc DOC_ID --name "Tasks"
+  craft collections create --doc DOC_ID --name "Tasks" --icon "✅" --description "All tasks"
+  craft collections create --doc DOC_ID --name "Tasks" --schema @schema.json
+  craft collections create --doc DOC_ID --name "Tasks" --schema '{"properties":[]}'`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateResourceID(collectionDocumentID, "document ID"); err != nil {
+			return err
+		}
+
+		var schemaPayload interface{}
+		if collectionSchemaInput != "" {
+			parsed, err := readSchemaInput(collectionSchemaInput)
+			if err != nil {
+				return err
+			}
+			schemaPayload = parsed
+		}
+
+		req := &models.CreateCollectionRequest{
+			DocumentID:  collectionDocumentID,
+			Name:        collectionCreateName,
+			Description: collectionCreateDesc,
+			Icon:        collectionCreateIcon,
+			Schema:      schemaPayload,
+		}
+
+		if isDryRun() {
+			return dryRunOutput("create collection", map[string]interface{}{
+				"method":      "POST",
+				"path":        "/collections",
+				"document_id": req.DocumentID,
+				"name":        req.Name,
+				"description": req.Description,
+				"icon":        req.Icon,
+				"schema":      req.Schema,
+			})
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		col, err := client.CreateCollection(req)
+		if err != nil {
+			return err
+		}
+
+		if isQuiet() {
+			fmt.Println(col.ID)
+			return nil
+		}
+
+		format := getOutputFormat()
+		if isJSONFormat(format) {
+			return outputJSON(col)
+		}
+
+		fmt.Printf("Collection created: %s (ID: %s)\n", col.Name, col.ID)
+		return nil
+	},
+}
+
+var collectionsSchemaUpdateCmd = &cobra.Command{
+	Use:   "update <collection-id>",
+	Short: "Replace a collection's schema",
+	Long: `Replace the schema for a collection.
+
+The --schema flag is required. It accepts either inline JSON or @filename.
+The schema is parsed client-side before sending to fail fast on bad input.
+
+Examples:
+  craft collections schema update COL_ID --schema @schema.json
+  craft collections schema update COL_ID --schema '{"properties":[{"key":"k","name":"K","type":"text"}]}'
+  craft collections schema update COL_ID --schema @schema.json --dry-run`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		collectionID := args[0]
+		if err := validateResourceID(collectionID, "collection ID"); err != nil {
+			return err
+		}
+
+		parsed, err := readSchemaInput(collectionSchemaInput)
+		if err != nil {
+			return err
+		}
+
+		if isDryRun() {
+			return dryRunOutput("update collection schema", map[string]interface{}{
+				"method":        "PUT",
+				"path":          fmt.Sprintf("/collections/%s/schema", collectionID),
+				"collection_id": collectionID,
+				"schema":        parsed,
+			})
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		updated, err := client.UpdateCollectionSchema(collectionID, parsed)
+		if err != nil {
+			return err
+		}
+
+		if isQuiet() {
+			return nil
+		}
+
+		format := getOutputFormat()
+		if isJSONFormat(format) {
+			if updated != nil {
+				return outputJSON(updated)
+			}
+			return outputJSON(map[string]interface{}{"ok": true, "collectionId": collectionID})
+		}
+
+		fmt.Printf("Schema updated for collection %s\n", collectionID)
+		return nil
 	},
 }
 
@@ -266,6 +436,21 @@ func init() {
 
 	collectionsCmd.AddCommand(collectionsSchemaCmd)
 	collectionsSchemaCmd.Flags().StringVar(&collectionSchemaFormat, "schema-format", "schema", "Schema format (default: schema)")
+
+	// `collections schema update <id> --schema @file|json` lives as a child of
+	// the existing `collections schema [id]` reader to avoid a breaking change.
+	collectionsSchemaCmd.AddCommand(collectionsSchemaUpdateCmd)
+	collectionsSchemaUpdateCmd.Flags().StringVar(&collectionSchemaInput, "schema", "", "New schema as inline JSON or @file (required)")
+	collectionsSchemaUpdateCmd.MarkFlagRequired("schema")
+
+	collectionsCmd.AddCommand(collectionsCreateCmd)
+	collectionsCreateCmd.Flags().StringVar(&collectionDocumentID, "doc", "", "Document ID to create the collection in (required)")
+	collectionsCreateCmd.Flags().StringVar(&collectionCreateName, "name", "", "Collection name (required)")
+	collectionsCreateCmd.Flags().StringVar(&collectionCreateDesc, "description", "", "Collection description")
+	collectionsCreateCmd.Flags().StringVar(&collectionCreateIcon, "icon", "", "Collection icon (emoji)")
+	collectionsCreateCmd.Flags().StringVar(&collectionSchemaInput, "schema", "", "Initial schema as inline JSON or @file")
+	collectionsCreateCmd.MarkFlagRequired("doc")
+	collectionsCreateCmd.MarkFlagRequired("name")
 
 	collectionsCmd.AddCommand(collectionsItemsCmd)
 	collectionsItemsCmd.Flags().IntVar(&collectionItemDepth, "depth", -1, "Max depth of nested content (-1 for no limit)")

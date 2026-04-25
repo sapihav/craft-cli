@@ -370,6 +370,290 @@ func TestClient_UpdateCollectionItem(t *testing.T) {
 	}
 }
 
+func TestClient_CreateCollection(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "POST" {
+				t.Errorf("Expected POST, got %s", r.Method)
+			}
+			if r.URL.Path != "/collections" {
+				t.Errorf("Expected path /collections, got %s", r.URL.Path)
+			}
+			var body struct {
+				Collections []models.CreateCollectionRequest `json:"collections"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if len(body.Collections) != 1 {
+				t.Fatalf("expected 1 collection, got %d", len(body.Collections))
+			}
+			c := body.Collections[0]
+			if c.DocumentID != "doc1" || c.Name != "Tasks" || c.Icon != "✅" || c.Description != "all the things" {
+				t.Errorf("unexpected request body: %+v", c)
+			}
+			schemaMap, ok := c.Schema.(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected schema map, got %T", c.Schema)
+			}
+			if _, ok := schemaMap["properties"]; !ok {
+				t.Errorf("expected schema.properties present")
+			}
+
+			resp := map[string]interface{}{
+				"items": []map[string]interface{}{
+					{"id": "col-new", "name": "Tasks", "documentId": "doc1", "itemCount": 0},
+				},
+			}
+			json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		req := &models.CreateCollectionRequest{
+			DocumentID:  "doc1",
+			Name:        "Tasks",
+			Description: "all the things",
+			Icon:        "✅",
+			Schema:      map[string]interface{}{"properties": []interface{}{}},
+		}
+		col, err := client.CreateCollection(req)
+		if err != nil {
+			t.Fatalf("CreateCollection() error = %v", err)
+		}
+		if col.ID != "col-new" {
+			t.Errorf("expected id 'col-new', got %q", col.ID)
+		}
+		if col.DocumentID != "doc1" {
+			t.Errorf("expected documentId 'doc1', got %q", col.DocumentID)
+		}
+	})
+
+	t.Run("response missing items falls back to request name+doc", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Server returns items[0] with only an ID; client should fill name/docID from request.
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"items": []map[string]interface{}{{"id": "col-new"}},
+			})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		col, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1", Name: "X"})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if col.Name != "X" || col.DocumentID != "doc1" {
+			t.Errorf("expected fallback name/doc, got %+v", col)
+		}
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		client := newTestClient("http://example.test")
+		if _, err := client.CreateCollection(nil); err == nil {
+			t.Error("expected error for nil request")
+		}
+	})
+
+	t.Run("missing documentId", func(t *testing.T) {
+		client := newTestClient("http://example.test")
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{Name: "x"})
+		if err == nil {
+			t.Error("expected error for missing documentId")
+		}
+	})
+
+	t.Run("missing name", func(t *testing.T) {
+		client := newTestClient("http://example.test")
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1"})
+		if err == nil {
+			t.Error("expected error for missing name")
+		}
+	})
+
+	t.Run("API 4xx error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"bad request","message":"invalid schema"}`))
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1", Name: "x"})
+		if err == nil {
+			t.Fatal("expected API error")
+		}
+		apiErr, ok := err.(*APIError)
+		if !ok {
+			t.Fatalf("expected *APIError, got %T", err)
+		}
+		if apiErr.StatusCode != 400 {
+			t.Errorf("expected status 400, got %d", apiErr.StatusCode)
+		}
+	})
+
+	t.Run("invalid response body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("not json"))
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1", Name: "x"})
+		if err == nil {
+			t.Fatal("expected JSON parse error")
+		}
+	})
+
+	t.Run("empty items in response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			json.NewEncoder(w).Encode(map[string]interface{}{"items": []interface{}{}})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1", Name: "x"})
+		if err == nil {
+			t.Fatal("expected error for empty items")
+		}
+	})
+
+	t.Run("transport error", func(t *testing.T) {
+		// Closed server URL → connection refused.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.CreateCollection(&models.CreateCollectionRequest{DocumentID: "doc1", Name: "x"})
+		if err == nil {
+			t.Fatal("expected transport error")
+		}
+	})
+}
+
+func TestClient_UpdateCollectionSchema(t *testing.T) {
+	t.Run("echoes updated schema", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "PUT" {
+				t.Errorf("Expected PUT, got %s", r.Method)
+			}
+			if r.URL.Path != "/collections/col1/schema" {
+				t.Errorf("Expected path /collections/col1/schema, got %s", r.URL.Path)
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if _, ok := body["properties"]; !ok {
+				t.Errorf("expected properties in body, got %v", body)
+			}
+
+			json.NewEncoder(w).Encode(models.CollectionSchema{
+				Key:  "col1",
+				Name: "Tasks",
+				Properties: []models.CollectionProperty{
+					{Key: "status", Name: "Status", Type: "select"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		schema := map[string]interface{}{
+			"properties": []interface{}{
+				map[string]interface{}{"key": "status", "name": "Status", "type": "select"},
+			},
+		}
+		result, err := client.UpdateCollectionSchema("col1", schema)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if result == nil || result.Key != "col1" || len(result.Properties) != 1 {
+			t.Errorf("unexpected result: %+v", result)
+		}
+	})
+
+	t.Run("empty body returns nil schema, nil error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		result, err := client.UpdateCollectionSchema("col1", map[string]interface{}{"properties": []interface{}{}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != nil {
+			t.Errorf("expected nil schema, got %+v", result)
+		}
+	})
+
+	t.Run("non-schema 2xx body is treated as success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Some Craft endpoints return a non-JSON body (e.g. plain "ok").
+			// This must not break the client.
+			w.Write([]byte("ok"))
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		result, err := client.UpdateCollectionSchema("col1", map[string]interface{}{"properties": []interface{}{}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != nil {
+			t.Errorf("expected nil schema for non-JSON body, got %+v", result)
+		}
+	})
+
+	t.Run("missing collection ID", func(t *testing.T) {
+		client := newTestClient("http://example.test")
+		if _, err := client.UpdateCollectionSchema("", map[string]interface{}{"a": 1}); err == nil {
+			t.Error("expected error for empty collection ID")
+		}
+	})
+
+	t.Run("nil schema", func(t *testing.T) {
+		client := newTestClient("http://example.test")
+		if _, err := client.UpdateCollectionSchema("col1", nil); err == nil {
+			t.Error("expected error for nil schema")
+		}
+	})
+
+	t.Run("API 4xx error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not found"}`))
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.UpdateCollectionSchema("col1", map[string]interface{}{"properties": []interface{}{}})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		apiErr, ok := err.(*APIError)
+		if !ok {
+			t.Fatalf("expected *APIError, got %T", err)
+		}
+		if apiErr.StatusCode != 404 {
+			t.Errorf("expected 404, got %d", apiErr.StatusCode)
+		}
+	})
+
+	t.Run("transport error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.UpdateCollectionSchema("col1", map[string]interface{}{"x": 1})
+		if err == nil {
+			t.Fatal("expected transport error")
+		}
+	})
+}
+
 func TestClient_DeleteCollectionItem(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {

@@ -252,6 +252,15 @@ type CollectionList struct {
 	Items []Collection `json:"items"`
 }
 
+// CreateCollectionRequest represents the request to create a new collection in a document.
+type CreateCollectionRequest struct {
+	DocumentID  string      `json:"documentId"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Icon        string      `json:"icon,omitempty"`
+	Schema      interface{} `json:"schema,omitempty"`
+}
+
 // CollectionSchema represents a collection's schema
 type CollectionSchema struct {
 	Key                string                 `json:"key"`
