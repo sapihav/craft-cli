@@ -4,6 +4,10 @@ A powerful command-line interface for interacting with Craft Documents. Built fo
 
 ![Craft CLI Demo](demo.gif)
 
+## Parity
+
+`████████████████████` **100%** — full Craft MCP coverage. All capability rows in [PARITY.md](PARITY.md) are shipped.
+
 ## Features
 
 - **Multi-Profile Support** - Store multiple Craft API connections and switch between them
