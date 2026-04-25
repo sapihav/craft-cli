@@ -6,8 +6,7 @@ _(work currently in flight)_
 
 ## Up Next
 
-1. [M3 — `blocks image` + `tasks get`](tasks/add-image-view-and-tasks-get.md) — P2 (MCP `image_view` + small wiring)
-2. [M4 — `--format mcp` output mode](tasks/add-mcp-output-format.md) — P3 (polish; drop-in MCP swap)
+1. [M4 — `--format mcp` output mode](tasks/add-mcp-output-format.md) — P3 (polish; drop-in MCP swap)
 
 ## Backlog
 

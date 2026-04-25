@@ -1,6 +1,6 @@
 # Craft Capability Parity Matrix
 
-Last audited: 2026-04-25 (M2 shipped)
+Last audited: 2026-04-25 (M3 shipped)
 
 This document maps the official Craft MCP server tools (`mcp.craft.do/my/mcp`,
 as exposed in this Claude session as `mcp__claude_ai_Craft__*`) to the
@@ -48,7 +48,7 @@ called out under "CLI-only / REST-only" below.
 | `blocks_delete`  | `craft blocks delete`                          | shipped       | |
 | `blocks_revert`  | `craft blocks revert`                          | shipped       | M2. `POST /blocks/{id}/revert` (path inferred — mirrors `/collections/{id}/schema` and `/whiteboards/{id}/elements` sub-resource pattern; not in public docs). Supports `--dry-run`, `--quiet`. |
 | `markdown_add`   | `craft blocks add --markdown` / `--stdin`      | shipped       | Folded into `blocks add` rather than a separate subcommand — convert markdown to blocks server-side. |
-| `image_view`     | _none_                                         | planned (M3)  | Will land as `craft blocks image <id> [--out file]`. Binary stdout by default. |
+| `image_view`     | `craft blocks image`                           | shipped       | M3. `GET /blocks/{id}/image` (path inferred — mirrors `/blocks/{id}/revert`). Binary stdout by default; `--out FILE` writes file + emits JSON envelope. Follows JSON-envelope redirects (`assetUrl`/`url`) one hop. Refuses to write binary to a TTY. |
 
 ### Documents
 
@@ -88,7 +88,7 @@ called out under "CLI-only / REST-only" below.
 | MCP tool         | CLI command            | Status        | Notes |
 |------------------|------------------------|---------------|-------|
 | `tasks_add`      | `craft tasks add`      | shipped       | |
-| `tasks_get`      | _none_                 | planned (M3)  | Single-task GET. List form via `tasks list` already exists. |
+| `tasks_get`      | `craft tasks get`      | shipped       | M3. `GET /tasks/{id}` (path inferred — REST conventions). JSON envelope `{"result":{"task":{...}}}`. |
 | `tasks_update`   | `craft tasks update`   | shipped       | |
 | `tasks_delete`   | `craft tasks delete`   | shipped       | |
 | (list)           | `craft tasks list`     | CLI-only      | Backed by `GetDocumentTasks`; no direct MCP equivalent — MCP exposes per-id only. |
@@ -137,7 +137,7 @@ parity gaps — out of MCP scope by design.
 
 ### The "4 MCP gaps" the backlog set out to close
 
-Checked against the current `cmd/` tree. As of 2026-04-25, M1 and M2 have
+Checked against the current `cmd/` tree. As of 2026-04-25, M1, M2, and M3 have
 shipped and closed all genuine gaps:
 
 | # | MCP tool                  | Milestone | Open?  |
@@ -145,15 +145,14 @@ shipped and closed all genuine gaps:
 | 1 | `collections_create`      | M1        | closed |
 | 2 | `collectionSchema_update` | M1        | closed |
 | 3 | `blocks_revert`           | M2        | closed |
-| 4 | `blocks search` wiring    | M2        | closed (no work needed) — `SearchBlocks` was already wired via `craft search --document`. The redundant `blocks search` alias proposed in the M2 task file was **skipped**: it would have been a thin wrapper duplicating an existing path with no agent affordance gained. |
+| 4 | `tasks_get`               | M3        | closed |
+| 5 | `image_view`              | M3        | closed |
+| 6 | `blocks search` wiring    | M2        | closed (no work needed) — `SearchBlocks` was already wired via `craft search --document`. The redundant `blocks search` alias proposed in the M2 task file was **skipped**: it would have been a thin wrapper duplicating an existing path with no agent affordance gained. |
 
-All 4 documented gaps are closed.
+All documented gaps are closed.
 
 ### Additional gaps not mentioned in the backlog
 
-- **`tasks_get`** — single-task GET. Listed in M3 but framed as P2; worth
-  flagging as a real gap not just a "small wiring" item.
-- **`image_view`** — same; M3.
 - **`collectionItems_get`** — per-item GET. CLI has `collections items` (list)
   but no single-item getter. Not in any milestone. ? — verify MCP semantics
   (the tool name is singular; could be either shape).

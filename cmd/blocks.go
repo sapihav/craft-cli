@@ -10,6 +10,7 @@ import (
 
 	"github.com/ashrafali/craft-cli/internal/models"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var blocksCmd = &cobra.Command{
@@ -431,6 +432,91 @@ Examples:
 	},
 }
 
+var (
+	blockImageOut    string
+	blockImageFormat string
+)
+
+// stdoutIsTTY reports whether stdout is a terminal. Overridable for tests.
+var stdoutIsTTY = func() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+var blocksImageCmd = &cobra.Command{
+	Use:   "image [block-id]",
+	Short: "Fetch the binary image for an image block",
+	Long: `Fetch the binary image content for an image block (MCP image_view parity).
+
+Default: writes raw image bytes to stdout (suitable for piping to file -,
+ImageMagick, etc.). Refuses to write binary to a TTY without --out, to avoid
+clobbering the terminal.
+
+Examples:
+  craft blocks image BLOCK_ID --out photo.png
+  craft blocks image BLOCK_ID --image-format jpeg --out photo.jpg
+  craft blocks image BLOCK_ID > photo.png
+  craft blocks image BLOCK_ID --dry-run`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		blockID := args[0]
+		if err := validateResourceID(blockID, "block ID"); err != nil {
+			return err
+		}
+
+		switch blockImageFormat {
+		case "", "png", "jpeg", "jpg", "webp", "gif":
+			// allowed
+		default:
+			return fmt.Errorf("invalid --image-format %q (allowed: png, jpeg, webp, gif)", blockImageFormat)
+		}
+
+		if isDryRun() {
+			return dryRunOutput("fetch block image", map[string]interface{}{
+				"id":     blockID,
+				"method": "GET",
+				"path":   fmt.Sprintf("/blocks/%s/image", blockID),
+				"format": blockImageFormat,
+				"out":    blockImageOut,
+			})
+		}
+
+		// Refuse to dump binary into an interactive terminal.
+		if blockImageOut == "" && stdoutIsTTY() {
+			return fmt.Errorf("refusing to write binary image to a TTY; use --out FILE or redirect stdout")
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		data, contentType, err := client.GetBlockImage(blockID, blockImageFormat)
+		if err != nil {
+			return err
+		}
+
+		if blockImageOut != "" {
+			if err := os.WriteFile(blockImageOut, data, 0o644); err != nil {
+				return fmt.Errorf("failed to write %s: %w", blockImageOut, err)
+			}
+			if isQuiet() {
+				return nil
+			}
+			result := map[string]interface{}{
+				"result": map[string]interface{}{
+					"path":         blockImageOut,
+					"content_type": contentType,
+					"size_bytes":   len(data),
+				},
+			}
+			return outputJSON(result)
+		}
+
+		_, err = os.Stdout.Write(data)
+		return err
+	},
+}
+
 // ========== Helper Functions ==========
 
 // parseBlocksJSON parses a JSON string into a slice of block maps.
@@ -679,4 +765,8 @@ func init() {
 	blocksMoveCmd.MarkFlagRequired("to")
 
 	blocksCmd.AddCommand(blocksRevertCmd)
+
+	blocksCmd.AddCommand(blocksImageCmd)
+	blocksImageCmd.Flags().StringVar(&blockImageOut, "out", "", "Write image bytes to FILE (prints JSON envelope to stdout)")
+	blocksImageCmd.Flags().StringVar(&blockImageFormat, "image-format", "", "Preferred image format: png, jpeg, webp, gif (default: image/*)")
 }

@@ -162,6 +162,53 @@ Examples:
 	},
 }
 
+var tasksGetCmd = &cobra.Command{
+	Use:   "get [task-id]",
+	Short: "Get a single task by ID",
+	Long: `Fetch a single task by its ID (MCP tasks_get parity).
+
+Default output is a JSON envelope: {"result":{"task":{...}}}. Use --format
+table for a human-readable single-task table, or --quiet to suppress all
+output (exit code only).
+
+Examples:
+  craft tasks get TASK_ID
+  craft tasks get TASK_ID --format table
+  craft tasks get TASK_ID --quiet`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+		if err := validateResourceID(taskID, "task ID"); err != nil {
+			return err
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		task, err := client.GetTask(taskID)
+		if err != nil {
+			return err
+		}
+
+		if isQuiet() {
+			return nil
+		}
+
+		format := getOutputFormat()
+		if isJSONFormat(format) {
+			envelope := map[string]interface{}{
+				"result": map[string]interface{}{
+					"task": task,
+				},
+			}
+			return outputJSON(envelope)
+		}
+		return outputTasks([]models.Task{*task}, format)
+	},
+}
+
 var tasksDeleteCmd = &cobra.Command{
 	Use:   "delete [task-id]",
 	Short: "Delete a task",
@@ -213,6 +260,8 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskDeadlineDate, "deadline", "", "Deadline date (YYYY-MM-DD)")
 
 	tasksCmd.AddCommand(tasksDeleteCmd)
+
+	tasksCmd.AddCommand(tasksGetCmd)
 }
 
 // outputTasks prints tasks in the specified format

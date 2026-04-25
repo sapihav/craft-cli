@@ -2,7 +2,7 @@
 title: M3 — `blocks image` (image_view) + `tasks get`
 type: task
 priority: P2
-status: todo
+status: done
 created: 2026-04-18
 ---
 

@@ -912,7 +912,193 @@ func (c *Client) RevertBlock(blockID string) (*models.Block, error) {
 	return &block, nil
 }
 
+// GetBlockImage fetches the binary image content for an image block.
+//
+// Endpoint: GET /blocks/{id}/image
+// The Craft REST API does not publicly document an image-fetch endpoint; this
+// path mirrors the sub-resource pattern used by `/blocks/{id}/revert`. The
+// `format` argument shapes the Accept header preference (e.g. "png", "jpeg",
+// "webp"); empty defaults to "image/*".
+//
+// The API may either:
+//   1. Return raw image bytes directly (Content-Type: image/...), or
+//   2. Return a JSON envelope (`{"assetUrl":"https://..."}` or `{"url":...}`)
+//      with a signed download URL — in which case this method follows the URL
+//      once (same Authorization, no other body) and returns the underlying
+//      bytes.
+//
+// Response body is capped at maxResponseBytes (50 MB).
+func (c *Client) GetBlockImage(blockID, format string) ([]byte, string, error) {
+	if blockID == "" {
+		return nil, "", fmt.Errorf("block ID is required")
+	}
+
+	accept := "image/*"
+	if format != "" {
+		accept = "image/" + format
+	}
+
+	path := fmt.Sprintf("/blocks/%s/image", url.PathEscape(blockID))
+	body, ct, err := c.fetchBinary("GET", path, accept)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// If the API returned JSON, treat it as an envelope with a redirect URL.
+	if isJSONContentType(ct) {
+		redirect, perr := parseImageRedirect(body)
+		if perr != nil {
+			return nil, "", perr
+		}
+		return c.fetchURL(redirect, accept)
+	}
+
+	return body, ct, nil
+}
+
+// fetchBinary performs an HTTP request expecting binary (or possibly JSON
+// envelope) bytes. Returns the body, content-type, and any error.
+func (c *Client) fetchBinary(method, path, accept string) ([]byte, string, error) {
+	reqURL := fmt.Sprintf("%s%s", c.baseURL, path)
+	req, err := http.NewRequest(method, reqURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		return nil, "", fmt.Errorf("response body exceeds %d byte limit", maxResponseBytes)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, "", c.handleErrorResponse(resp.StatusCode, body)
+	}
+
+	return body, resp.Header.Get("Content-Type"), nil
+}
+
+// fetchURL fetches a fully-qualified URL (used to follow image-redirect
+// envelopes returned by the API). One hop only — same auth header is sent so
+// the API can validate signed download URLs hosted on the same origin; the
+// http.Client's CheckRedirect policy strips it on cross-origin redirects.
+//
+// The redirect scheme must match the configured baseURL scheme to prevent
+// downgrade attacks (in production, baseURL is HTTPS so HTTP redirects are
+// rejected; tests use HTTP throughout via httptest).
+func (c *Client) fetchURL(rawURL, accept string) ([]byte, string, error) {
+	if rawURL == "" {
+		return nil, "", fmt.Errorf("redirect URL is empty")
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("malformed redirect URL: %w", err)
+	}
+	baseParsed, _ := url.Parse(c.baseURL)
+	expectedScheme := "https"
+	if baseParsed != nil && baseParsed.Scheme != "" {
+		expectedScheme = baseParsed.Scheme
+	}
+	if parsed.Scheme != expectedScheme {
+		return nil, "", fmt.Errorf("redirect URL scheme mismatch (got %q, want %q)", parsed.Scheme, expectedScheme)
+	}
+
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create redirect request: %w", err)
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("redirect fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read redirect body: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		return nil, "", fmt.Errorf("redirect body exceeds %d byte limit", maxResponseBytes)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, "", c.handleErrorResponse(resp.StatusCode, body)
+	}
+	return body, resp.Header.Get("Content-Type"), nil
+}
+
+// isJSONContentType reports whether ct is a JSON content-type.
+func isJSONContentType(ct string) bool {
+	ct = strings.ToLower(ct)
+	return strings.HasPrefix(ct, "application/json") || strings.HasPrefix(ct, "text/json")
+}
+
+// parseImageRedirect extracts the download URL from a JSON envelope. Accepts
+// either `assetUrl` or `url` field names (the former matches UploadResponse's
+// existing convention).
+func parseImageRedirect(body []byte) (string, error) {
+	var env struct {
+		AssetURL string `json:"assetUrl"`
+		URL      string `json:"url"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return "", fmt.Errorf("invalid image envelope: %w", err)
+	}
+	if env.AssetURL != "" {
+		return env.AssetURL, nil
+	}
+	if env.URL != "" {
+		return env.URL, nil
+	}
+	return "", fmt.Errorf("image envelope missing assetUrl/url field")
+}
+
 // ========== Task Operations ==========
+
+// GetTask retrieves a single task by ID.
+//
+// Endpoint: GET /tasks/{id}
+// Mirrors the resource-by-id pattern used elsewhere (e.g. `/blocks?id=...`,
+// `/collections/{id}/schema`). The Craft REST API does not publicly document
+// the per-task endpoint; the path follows REST conventions.
+func (c *Client) GetTask(taskID string) (*models.Task, error) {
+	if taskID == "" {
+		return nil, fmt.Errorf("task ID is required")
+	}
+
+	path := fmt.Sprintf("/tasks/%s", url.PathEscape(taskID))
+	data, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var task models.Task
+	if err := json.Unmarshal(data, &task); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+
+	return &task, nil
+}
 
 // GetTasks retrieves tasks with optional filters
 func (c *Client) GetTasks(scope string) (*models.TaskList, error) {

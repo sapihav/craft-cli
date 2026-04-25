@@ -127,6 +127,12 @@ craft delete <document-id> --dry-run
 
 # Revert a block change (MCP blocks_revert parity)
 craft blocks revert <block-id>
+
+# Fetch the binary image of an image block (MCP image_view parity)
+craft blocks image <block-id> --out photo.png
+
+# Get a single task by ID (MCP tasks_get parity)
+craft tasks get <task-id>
 ```
 
 ### Collection Operations
