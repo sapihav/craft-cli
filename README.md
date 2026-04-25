@@ -124,6 +124,9 @@ craft clear <document-id>
 
 # Preview delete without executing
 craft delete <document-id> --dry-run
+
+# Revert a block change (MCP blocks_revert parity)
+craft blocks revert <block-id>
 ```
 
 ### Collection Operations

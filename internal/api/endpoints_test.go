@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ashrafali/craft-cli/internal/models"
@@ -727,6 +729,174 @@ func TestClient_GetBlockWithOptions(t *testing.T) {
 		}
 		if result.Markdown != "Simple block" {
 			t.Errorf("Expected markdown 'Simple block', got %s", result.Markdown)
+		}
+	})
+}
+
+func TestClient_RevertBlock(t *testing.T) {
+	t.Run("happy path with bare Block response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "POST" {
+				t.Errorf("Expected POST method, got %s", r.Method)
+			}
+			if r.URL.Path != "/blocks/block-1/revert" {
+				t.Errorf("Expected path /blocks/block-1/revert, got %s", r.URL.Path)
+			}
+			body, _ := io.ReadAll(r.Body)
+			if len(body) != 0 {
+				t.Errorf("Expected empty request body, got %q", string(body))
+			}
+
+			response := models.Block{ID: "block-1", Type: "text", Markdown: "reverted content"}
+			json.NewEncoder(w).Encode(response)
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		result, err := client.RevertBlock("block-1")
+		if err != nil {
+			t.Fatalf("RevertBlock() error = %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil block")
+		}
+		if result.ID != "block-1" {
+			t.Errorf("Expected block ID 'block-1', got %s", result.ID)
+		}
+		if result.Markdown != "reverted content" {
+			t.Errorf("Expected markdown 'reverted content', got %s", result.Markdown)
+		}
+	})
+
+	t.Run("happy path with items envelope", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			response := map[string]interface{}{
+				"items": []map[string]interface{}{
+					{"id": "block-2", "type": "text", "markdown": "old text"},
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		result, err := client.RevertBlock("block-2")
+		if err != nil {
+			t.Fatalf("RevertBlock() error = %v", err)
+		}
+		if result == nil || result.ID != "block-2" {
+			t.Errorf("Expected block-2, got %+v", result)
+		}
+	})
+
+	t.Run("empty 2xx body returns nil block", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			// no body
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		result, err := client.RevertBlock("block-3")
+		if err != nil {
+			t.Fatalf("RevertBlock() error = %v", err)
+		}
+		if result != nil {
+			t.Errorf("Expected nil block on empty response, got %+v", result)
+		}
+	})
+
+	t.Run("rejects empty block ID", func(t *testing.T) {
+		client := newTestClient("https://example.invalid")
+		_, err := client.RevertBlock("")
+		if err == nil {
+			t.Fatal("expected error for empty block ID")
+		}
+	})
+
+	t.Run("404 not found", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(models.ErrorResponse{Error: "not_found", Message: "block not found", Code: 404})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.RevertBlock("missing")
+		if err == nil {
+			t.Fatal("expected error on 404")
+		}
+		if !strings.Contains(err.Error(), "resource not found") {
+			t.Errorf("expected 'resource not found', got %v", err)
+		}
+	})
+
+	t.Run("422 not revertable", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			json.NewEncoder(w).Encode(models.ErrorResponse{Error: "not_revertable", Message: "block has no prior state", Code: 422})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.RevertBlock("block-4")
+		if err == nil {
+			t.Fatal("expected error on 422")
+		}
+		apiErr, ok := err.(*APIError)
+		if !ok {
+			t.Fatalf("expected *APIError, got %T", err)
+		}
+		if apiErr.StatusCode != 422 {
+			t.Errorf("expected status 422, got %d", apiErr.StatusCode)
+		}
+	})
+
+	t.Run("500 server error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(models.ErrorResponse{Error: "server", Message: "boom", Code: 500})
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.RevertBlock("block-5")
+		if err == nil {
+			t.Fatal("expected error on 500")
+		}
+		if !strings.Contains(err.Error(), "Craft API error") {
+			t.Errorf("expected 'Craft API error', got %v", err)
+		}
+	})
+
+	t.Run("malformed JSON response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"id": "block-6", "type":`) // truncated
+		}))
+		defer server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.RevertBlock("block-6")
+		if err == nil {
+			t.Fatal("expected error on malformed JSON")
+		}
+		if !strings.Contains(err.Error(), "invalid response from API") {
+			t.Errorf("expected 'invalid response from API', got %v", err)
+		}
+	})
+
+	t.Run("transport error", func(t *testing.T) {
+		// Server immediately closed → connection refused.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		server.Close()
+
+		client := newTestClient(server.URL)
+		_, err := client.RevertBlock("block-7")
+		if err == nil {
+			t.Fatal("expected transport error")
+		}
+		if !strings.Contains(err.Error(), "request failed") {
+			t.Errorf("expected 'request failed', got %v", err)
 		}
 	})
 }

@@ -381,6 +381,56 @@ Examples:
 	},
 }
 
+var blocksRevertCmd = &cobra.Command{
+	Use:   "revert [block-id]",
+	Short: "Revert a block to its previous state",
+	Long: `Revert a block change, restoring its previous state.
+
+Mirrors the MCP blocks_revert tool. Returns the post-revert block when the
+API echoes one. Use --dry-run to preview the planned mutation.
+
+Examples:
+  craft blocks revert BLOCK_ID
+  craft blocks revert BLOCK_ID --dry-run
+  craft blocks revert BLOCK_ID --quiet`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		blockID := args[0]
+		if err := validateResourceID(blockID, "block ID"); err != nil {
+			return err
+		}
+
+		if isDryRun() {
+			return dryRunOutput("revert block", map[string]interface{}{
+				"id":     blockID,
+				"method": "POST",
+				"path":   fmt.Sprintf("/blocks/%s/revert", blockID),
+			})
+		}
+
+		client, err := getAPIClient()
+		if err != nil {
+			return err
+		}
+
+		block, err := client.RevertBlock(blockID)
+		if err != nil {
+			return err
+		}
+
+		if isQuiet() {
+			return nil
+		}
+
+		format := getOutputFormat()
+		if isJSONFormat(format) && block != nil {
+			return outputJSON(block)
+		}
+		fmt.Printf("Block %s reverted\n", blockID)
+		return nil
+	},
+}
+
 // ========== Helper Functions ==========
 
 // parseBlocksJSON parses a JSON string into a slice of block maps.
@@ -627,4 +677,6 @@ func init() {
 	blocksMoveCmd.Flags().StringVar(&blockTargetPage, "to", "", "Target page ID")
 	blocksMoveCmd.Flags().StringVarP(&blockPosition, "position", "p", "end", "Position: start, end")
 	blocksMoveCmd.MarkFlagRequired("to")
+
+	blocksCmd.AddCommand(blocksRevertCmd)
 }

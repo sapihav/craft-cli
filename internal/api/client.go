@@ -871,6 +871,47 @@ func (c *Client) MoveBlock(blockID, targetPageID, position string) error {
 	return err
 }
 
+// RevertBlock reverts a block to its previous state.
+//
+// Endpoint: POST /blocks/{id}/revert
+// The Craft REST API does not publicly document the revert endpoint; this path
+// mirrors the sub-resource pattern used by `/collections/{id}/schema` and
+// `/whiteboards/{id}/elements`. The response is decoded as a single Block when
+// the body is a JSON object, or wrapped under `items[0]` when the API returns
+// an envelope (mirroring `addBlockResponse`). On a 2xx with an empty/non-JSON
+// body, returns (nil, nil) to indicate success.
+func (c *Client) RevertBlock(blockID string) (*models.Block, error) {
+	if blockID == "" {
+		return nil, fmt.Errorf("block ID is required")
+	}
+
+	path := fmt.Sprintf("/blocks/%s/revert", url.PathEscape(blockID))
+	data, err := c.doRequest("POST", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+
+	// Try the `{"items":[…]}` envelope first (mirrors addBlockResponse).
+	var envelope struct {
+		Items []models.Block `json:"items"`
+	}
+	if err := json.Unmarshal(data, &envelope); err == nil && len(envelope.Items) > 0 {
+		b := envelope.Items[0]
+		return &b, nil
+	}
+
+	// Fall back to a bare Block object.
+	var block models.Block
+	if err := json.Unmarshal(data, &block); err != nil {
+		return nil, fmt.Errorf("invalid response from API: %w", err)
+	}
+	return &block, nil
+}
+
 // ========== Task Operations ==========
 
 // GetTasks retrieves tasks with optional filters

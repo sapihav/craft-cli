@@ -1,6 +1,6 @@
 # Craft Capability Parity Matrix
 
-Last audited: 2026-04-25
+Last audited: 2026-04-25 (M2 shipped)
 
 This document maps the official Craft MCP server tools (`mcp.craft.do/my/mcp`,
 as exposed in this Claude session as `mcp__claude_ai_Craft__*`) to the
@@ -46,7 +46,7 @@ called out under "CLI-only / REST-only" below.
 | `blocks_update`  | `craft blocks update`                          | shipped       | |
 | `blocks_move`    | `craft blocks move`                            | shipped       | |
 | `blocks_delete`  | `craft blocks delete`                          | shipped       | |
-| `blocks_revert`  | _none_                                         | planned (M2)  | New client method + subcommand. Endpoint path TBD at impl time (`POST /blocks/{id}/revert`?). |
+| `blocks_revert`  | `craft blocks revert`                          | shipped       | M2. `POST /blocks/{id}/revert` (path inferred — mirrors `/collections/{id}/schema` and `/whiteboards/{id}/elements` sub-resource pattern; not in public docs). Supports `--dry-run`, `--quiet`. |
 | `markdown_add`   | `craft blocks add --markdown` / `--stdin`      | shipped       | Folded into `blocks add` rather than a separate subcommand — convert markdown to blocks server-side. |
 | `image_view`     | _none_                                         | planned (M3)  | Will land as `craft blocks image <id> [--out file]`. Binary stdout by default. |
 
@@ -59,7 +59,7 @@ called out under "CLI-only / REST-only" below.
 | `documents_delete`   | `craft delete`             | shipped  | Soft-delete (moves to trash). |
 | `documents_move`     | `craft move`               | shipped  | `--folder`/`--location` (unsorted, trash, templates, daily_notes). |
 | `documents_search`   | `craft search`             | shipped  | Document-level fuzzy search. API caps at 20 results. |
-| `document_search`    | `craft search --document`  | shipped  | Block-level search inside a single doc. Wires `client.SearchBlocks`. The M2 backlog claims this client method is "dead code"; it is **not** — `craft search --document` already calls it. M2 still adds a dedicated `blocks search` subcommand, which would be a thin alias. |
+| `document_search`    | `craft search --document`  | shipped  | Block-level search inside a single doc. Wires `client.SearchBlocks`. M2 originally proposed a dedicated `blocks search` alias; **skipped** — would be a redundant thin wrapper since `craft search --document` already covers the use case. No agent affordance lost. |
 
 ### Folders
 
@@ -137,17 +137,17 @@ parity gaps — out of MCP scope by design.
 
 ### The "4 MCP gaps" the backlog set out to close
 
-Checked against the current `cmd/` tree. As of 2026-04-25, M1 has shipped
-and closed the two collection-authoring gaps:
+Checked against the current `cmd/` tree. As of 2026-04-25, M1 and M2 have
+shipped and closed all genuine gaps:
 
 | # | MCP tool                  | Milestone | Open?  |
 |---|---------------------------|-----------|--------|
 | 1 | `collections_create`      | M1        | closed |
 | 2 | `collectionSchema_update` | M1        | closed |
-| 3 | `blocks_revert`           | M2        | open   |
-| 4 | `blocks search` wiring    | M2        | partially closed — `SearchBlocks` is **already** wired via `craft search --document`; M2 only adds a redundant `blocks search` alias. The "dead code" framing in the M2 task file is inaccurate. |
+| 3 | `blocks_revert`           | M2        | closed |
+| 4 | `blocks search` wiring    | M2        | closed (no work needed) — `SearchBlocks` was already wired via `craft search --document`. The redundant `blocks search` alias proposed in the M2 task file was **skipped**: it would have been a thin wrapper duplicating an existing path with no agent affordance gained. |
 
-So 2 of 4 closed in M1; the remaining `blocks_revert` is the last genuine gap, with `blocks search` being a cosmetic alias.
+All 4 documented gaps are closed.
 
 ### Additional gaps not mentioned in the backlog
 
