@@ -1,6 +1,6 @@
 # Craft Capability Parity Matrix
 
-Last audited: 2026-04-25 (M3 shipped)
+Last audited: 2026-04-26 (M3 shipped; published-artifact smoke clean: brew formula `sapihav/tap/craft-cli` v1.10.4 — `version`, `--help`, `schema` all pass)
 
 This document maps the official Craft MCP server tools (`mcp.craft.do/my/mcp`,
 as exposed in this Claude session as `mcp__claude_ai_Craft__*`) to the
