@@ -28,10 +28,10 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          # Skip the Homebrew tap upload: it requires a cross-repo PAT that
-          # would need to be added as a secret (HOMEBREW_TAP_GITHUB_TOKEN).
-          # Local releases from a dev machine with such a token set in the
-          # environment still push to sapihav/homebrew-tap.
-          args: release --clean --skip=homebrew
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with `contents: write` on sapihav/homebrew-tap. Required
+          # because GITHUB_TOKEN is scoped to this repo only. Same secret
+          # that exa/perplexity/tavily/clef already use.
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
