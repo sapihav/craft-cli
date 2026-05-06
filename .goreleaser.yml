@@ -76,6 +76,13 @@ brews:
       # back to GITHUB_TOKEN which is scoped to this repo only and can't
       # write to the tap.
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    # Force Formula/ subfolder. Goreleaser v2's `brews:` (deprecated in
+    # favor of `homebrew_casks:`) writes to repo root by default, but
+    # brew tap auto-discovery only scans Formula/ — tap users running
+    # `brew install sapihav/tap/craft-cli` get "No available formula"
+    # without this. Tap historically had Formula/craft-cli.rb (see
+    # 5837f8e in sapihav/homebrew-tap, 2026-04-13).
+    directory: Formula
     homepage: https://github.com/sapihav/craft-cli
     description: CLI for interacting with Craft.do documents
     license: MIT
